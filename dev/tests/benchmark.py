@@ -32,8 +32,7 @@ n_doms = 500
 x = np.array(x)
 xx = x[np.newaxis, :]
 xx = np.repeat(xx, n_doms, axis=0)
-y = np.random.normal(0.025, 0.001, 500)
-xx[:, 0] = y
+xx[:, 0] = np.random.normal(0.025, 0.001, 500)
 xx = jnp.array(xx)
 xx.devices() # shape n_doms x 7 (n_inputs)
 
