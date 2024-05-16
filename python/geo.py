@@ -2,12 +2,10 @@ import jax.numpy as jnp
 import jax
 import numpy as np
 
-_recip__speedOfLight = 3.3356409519815204
-_n__ = 1.32548384613875
-_tan__thetaC = (_n__**2.-1.)**0.5
-
-__n_ice_phase = 1.3195;
-__n_ice_group = 1.35634;
+#__n_ice_phase = 1.3195;
+#__n_ice_group = 1.35634;
+__n_ice_phase = 1.30799291638281
+__n_ice_group = 1.32548384613875
 __n_ice = __n_ice_group
 __theta_cherenkov = np.arccos(1/__n_ice_phase)
 __sin_theta_cherenkov = np.sin(__theta_cherenkov)
@@ -86,28 +84,6 @@ convert_spherical_to_cartesian_direction_v = jax.jit(jax.vmap(closest_distance_d
 
 
 @jax.jit
-def light_travel_time(dom_pos, track_pos, track_dir):
-    """
-    Computes the direct, unscattered time it takes for a photon to travel from
-    the track to the dom.
-    See Eq. 4 of the AMANDA track reco paper https://arxiv.org/pdf/astro-ph/0407044
-    """
-    closest_dist = closest_distance_dom_track(dom_pos, track_pos, track_dir)
-
-    # vector track support point -> dom
-    v_a = dom_pos - track_pos
-    # distance muon travels from support point to point of closest approach.
-    d1 = jnp.dot(v_a, track_dir)
-    # distance that muon travels beyond closest approach until photon hits.
-    d2 = closest_dist * _tan__thetaC
-    return (d1+d2) * _recip__speedOfLight
-
-# Generalize to matrix input for dom_pos with shape (N_DOMs, 3).
-# Output will be in form of (N_DOMs, 1)
-light_travel_time_v = jax.jit(jax.vmap(light_travel_time, (0, None, None), 0))
-
-
-@jax.jit
 def light_travel_time_i3calculator(dom_pos, track_pos, track_dir):
     """
     roughly following https://github.com/icecube/icetray/blob/dde656a29dbd8330e5f54f9260550952f0269bc9/phys-services/private/phys-services/I3Calculator.cxx#L19
@@ -167,3 +143,30 @@ def rho_dom_relative_to_track(dom_pos, track_pos, track_dir):
 rho_dom_relative_to_track_v = jax.jit(jax.vmap(rho_dom_relative_to_track, (0, None, None), 0))
 
 
+_recip__speedOfLight = 3.3356409519815204
+_n__ = 1.32548384613875
+_tan__thetaC = (_n__**2.-1.)**0.5
+
+@jax.jit
+def light_travel_time(dom_pos, track_pos, track_dir):
+    """
+    SplineMPE uses the I3Calculator version below. Differences are small.
+    Better use light_travel_time_i3calculator() or cherenkov_cylinder_coordinates()
+
+    Computes the direct, unscattered time it takes for a photon to travel from
+    the track to the dom.
+    See Eq. 4 of the AMANDA track reco paper https://arxiv.org/pdf/astro-ph/0407044
+    """
+    closest_dist = closest_distance_dom_track(dom_pos, track_pos, track_dir)
+
+    # vector track support point -> dom
+    v_a = dom_pos - track_pos
+    # distance muon travels from support point to point of closest approach.
+    d1 = jnp.dot(v_a, track_dir)
+    # distance that muon travels beyond closest approach until photon hits.
+    d2 = closest_dist * _tan__thetaC
+    return (d1+d2) * _recip__speedOfLight
+
+# Generalize to matrix input for dom_pos with shape (N_DOMs, 3).
+# Output will be in form of (N_DOMs, 1)
+light_travel_time_v = jax.jit(jax.vmap(light_travel_time, (0, None, None), 0))
