@@ -16,6 +16,11 @@ __c_ice = __c/__n_ice_group
 
 @jax.jit
 def cherenkov_cylinder_coordinates(dom_pos, track_pos, track_dir):
+	"""
+	dom_pos: 1D jax array with 3 components [x, y, z]
+	track_pos: 1D jax array with 3 components [x, y, z]
+	track_dir: 1D jax array with 3 components [dir_x, dir_y, dir_z]
+	"""
 	# vector from vertex to dom
 	v_a = dom_pos - track_pos
 
@@ -69,6 +74,7 @@ closest_distance_dom_track_v = jax.jit(jax.vmap(closest_distance_dom_track, (0, 
 @jax.jit
 def convert_spherical_to_cartesian_direction(x):
     """
+	x = (theta, phi)
     """
     track_theta = x[0]
     track_phi = x[1]
@@ -87,6 +93,10 @@ convert_spherical_to_cartesian_direction_v = jax.jit(jax.vmap(closest_distance_d
 def light_travel_time_i3calculator(dom_pos, track_pos, track_dir):
     """
     roughly following https://github.com/icecube/icetray/blob/dde656a29dbd8330e5f54f9260550952f0269bc9/phys-services/private/phys-services/I3Calculator.cxx#L19
+
+    dom_pos: 1D jax array with 3 components [x, y, z]
+    track_pos: 1D jax array with 3 components [x, y, z]
+    track_dir: 1D jax array with 3 components [dir_x, dir_y, dir_z]
     """
     dc = closest_distance_dom_track(dom_pos, track_pos, track_dir)
 
@@ -105,6 +115,23 @@ def light_travel_time_i3calculator(dom_pos, track_pos, track_dir):
     return (ds - dx + dt * __n_ice_group) / __c
 
 light_travel_time_i3calculator_v = jax.jit(jax.vmap(light_travel_time_i3calculator, (0, None, None), 0))
+
+
+@jax.jit
+def closest_point_on_track(dom_pos, track_pos, track_dir):
+    """
+    dom_pos: 1D jax array with 3 components [x, y, z]
+    track_pos: 1D jax array with 3 components [x, y, z]
+    track_dir: 1D jax array with 3 components [dir_x, dir_y, dir_z]
+    """
+
+    # vector track support point -> dom
+    v_a = dom_pos - track_pos
+    # vector: vector to closest point on track
+    v_c = track_pos + jnp.dot(v_a, track_dir) * track_dir
+    return v_c
+
+closest_point_on_track_v = jax.jit(jax.vmap(closest_point_on_track, (0, None, None), 0))
 
 
 @jax.jit
@@ -128,6 +155,10 @@ z_component_closest_point_on_track_v = jax.jit(jax.vmap(z_component_closest_poin
 def rho_dom_relative_to_track(dom_pos, track_pos, track_dir):
     """
     clean up and verify!
+
+    dom_pos: 1D jax array with 3 components [x, y, z]
+    track_pos: 1D jax array with 3 components [x, y, z]
+    track_dir: 1D jax array with 3 components [dir_x, dir_y, dir_z]
     """
     v1 = dom_pos - track_pos
     closestapproach = track_pos + jnp.dot(v1, track_dir)*track_dir
@@ -143,6 +174,7 @@ def rho_dom_relative_to_track(dom_pos, track_pos, track_dir):
 rho_dom_relative_to_track_v = jax.jit(jax.vmap(rho_dom_relative_to_track, (0, None, None), 0))
 
 
+'''
 _recip__speedOfLight = 3.3356409519815204
 _n__ = 1.32548384613875
 _tan__thetaC = (_n__**2.-1.)**0.5
@@ -150,7 +182,7 @@ _tan__thetaC = (_n__**2.-1.)**0.5
 @jax.jit
 def light_travel_time(dom_pos, track_pos, track_dir):
     """
-    SplineMPE uses the I3Calculator version below. Differences are small.
+    SplineMPE uses the I3Calculator version above. Differences are small.
     Better use light_travel_time_i3calculator() or cherenkov_cylinder_coordinates()
 
     Computes the direct, unscattered time it takes for a photon to travel from
@@ -170,3 +202,7 @@ def light_travel_time(dom_pos, track_pos, track_dir):
 # Generalize to matrix input for dom_pos with shape (N_DOMs, 3).
 # Output will be in form of (N_DOMs, 1)
 light_travel_time_v = jax.jit(jax.vmap(light_travel_time, (0, None, None), 0))
+'''
+
+
+
