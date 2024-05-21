@@ -7,9 +7,7 @@ import numpy as np
 import glob
 import os, sys
 
-sys.path.insert(0, '/home/storage/hans/jax_reco/python/')
-
-from pulse_extraction_from_i3 import get_pulse_info
+from python.pulse_extraction_from_i3 import get_pulse_info
 
 from argparse import ArgumentParser
 
@@ -64,7 +62,7 @@ file_index_end = args.FILE_INDEX_END
 outdir = args.OUTDIR
 
 if args.RECOMPUTE_MU_E:
-    from muon_energy import add_muon_energy
+    from python.muon_energy import add_muon_energy
 
 n_events_per_file = int(1.e5) # unique event ids.
 
