@@ -16,36 +16,36 @@ __c_ice = __c/__n_ice_group
 
 @jax.jit
 def cherenkov_cylinder_coordinates(dom_pos, track_pos, track_dir):
-	"""
-	dom_pos: 1D jax array with 3 components [x, y, z]
-	track_pos: 1D jax array with 3 components [x, y, z]
-	track_dir: 1D jax array with 3 components [dir_x, dir_y, dir_z]
-	"""
-	# vector from vertex to dom
-	v_a = dom_pos - track_pos
+    """
+    dom_pos: 1D jax array with 3 components [x, y, z]
+    track_pos: 1D jax array with 3 components [x, y, z]
+    track_dir: 1D jax array with 3 components [dir_x, dir_y, dir_z]
+    """
+    # vector from vertex to dom
+    v_a = dom_pos - track_pos
 
-	# distance muon travels from track vertex to point of closest approach.
-	ds = jnp.dot(v_a, track_dir)
+    # distance muon travels from track vertex to point of closest approach.
+    ds = jnp.dot(v_a, track_dir)
 
-	# a vector parallel track with length ds
-	ds_v = ds * track_dir
+    # a vector parallel track with length ds
+    ds_v = ds * track_dir
 
-	# vector closest approach position to dom yields closest approach distance
-	v_d = v_a - ds_v
-	dc = jnp.linalg.norm(v_d)
+    # vector closest approach position to dom yields closest approach distance
+    v_d = v_a - ds_v
+    dc = jnp.linalg.norm(v_d)
 
-	# vector to closest approach position gives z-component
-	v_c = track_pos + ds_v
-	v_c_z = v_c[2]
+    # vector to closest approach position gives z-component
+    v_c = track_pos + ds_v
+    v_c_z = v_c[2]
 
-	# distance that the photon travel
-	dt = dc / __sin_theta_cherenkov
+    # distance that the photon travel
+    dt = dc / __sin_theta_cherenkov
 
-	# distance emission point to closest approach point
-	dx = dc / __tan_theta_cherenkov
+    # distance emission point to closest approach point
+    dx = dc / __tan_theta_cherenkov
 
-	### missing: add last return value -> rho angle of track
-	return (ds - dx + dt * __n_ice_group) / __c, dc, v_c_z
+    ### missing: add last return value -> rho angle of track
+    return (ds - dx + dt * __n_ice_group) / __c, dc, v_c_z
 
 
 cherenkov_cylinder_coordinates_v = jax.jit(jax.vmap(cherenkov_cylinder_coordinates, (0, None, None), (0, 0, 0)))
@@ -74,7 +74,7 @@ closest_distance_dom_track_v = jax.jit(jax.vmap(closest_distance_dom_track, (0, 
 @jax.jit
 def convert_spherical_to_cartesian_direction(x):
     """
-	x = (theta, phi)
+    x = (theta, phi)
     """
     track_theta = x[0]
     track_phi = x[1]
@@ -87,6 +87,15 @@ def convert_spherical_to_cartesian_direction(x):
 # Generalize to matrix input for x with shape (N_DOMs, 2) for theta and phi angles.
 # Output will be in form of (N_DOMs, 3) for dir_x, dir_y, dir_z
 convert_spherical_to_cartesian_direction_v = jax.jit(jax.vmap(closest_distance_dom_track, 0, 0))
+
+
+@jax.jit
+def get_xyz_from_zenith_azimuth(x):
+    track_dir = convert_spherical_to_cartesian_direction(x)
+    y = -1 * track_dir
+    return y
+
+get_xyz_from_zenith_azimuth_v = jax.jit(jax.vmap(get_xyz_from_zenith_azimuth, 0, 0))
 
 
 @jax.jit
