@@ -58,7 +58,6 @@ def sample_times(event_data: pd.DataFrame,
 
     n_tot = np.amax(charges)
     times = np.array(gm.sample(sample_shape = n_tot, seed = prng_key))
-    print(times.shape)
 
     n_doms = times.shape[1]
     first_times = np.zeros(n_doms)
