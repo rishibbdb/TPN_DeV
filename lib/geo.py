@@ -1,6 +1,7 @@
 import jax.numpy as jnp
 import jax
 import numpy as np
+import pandas as pd
 
 #__n_ice_phase = 1.3195;
 #__n_ice_group = 1.35634;
@@ -12,6 +13,46 @@ __sin_theta_cherenkov = np.sin(__theta_cherenkov)
 __tan_theta_cherenkov = np.tan(__theta_cherenkov)
 __c = 0.299792458 # m / ns
 __c_ice = __c/__n_ice_group
+
+
+def center_track_pos_and_time_based_on_data(event_data: pd.DataFrame, track_pos, track_time, track_dir):
+    track_dir_xyz = get_xyz_from_zenith_azimuth(track_dir)
+    centered_track_time = np.sum(event_data['charge'] * event_data['time']) / np.sum(event_data['charge'])
+    centered_track_pos = track_pos + (centered_track_time - track_time) * __c * track_dir_xyz
+    return jnp.array(centered_track_pos), jnp.float64(centered_track_time)
+
+
+@jax.jit
+def geo_time(dom_pos, track_pos, track_dir):
+    """
+    roughly following https://github.com/icecube/icetray/blob/dde656a29dbd8330e5f54f9260550952f0269bc9/phys-services/private/phys-services/I3Calculator.cxx#L19
+
+    dom_pos: 1D jax array with 3 components [x, y, z]
+    track_pos: 1D jax array with 3 components [x, y, z]
+    track_dir: 1D jax array with 3 components [dir_x, dir_y, dir_z]
+    """
+    # vector from vertex to dom
+    v_a = dom_pos - track_pos
+
+    # distance muon travels from track vertex to point of closest approach.
+    ds = jnp.dot(v_a, track_dir)
+
+    # a vector parallel track with length ds
+    ds_v = ds * track_dir
+
+    # vector closest approach position to dom yields closest approach distance
+    v_d = v_a - ds_v
+    dc = jnp.linalg.norm(v_d)
+
+    # distance that the photon travels
+    dt = dc / __sin_theta_cherenkov
+
+    # distance emission point to closest approach point
+    dx = dc / __tan_theta_cherenkov
+
+    return (ds - dx + dt * __n_ice_group) / __c
+
+geo_time_v = jax.jit(jax.vmap(geo_time, (0, None, None), 0))
 
 
 @jax.jit

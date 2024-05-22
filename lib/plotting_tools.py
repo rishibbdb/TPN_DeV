@@ -22,7 +22,7 @@ def adjust_plot_1d(fig, ax, plot_args=None):
     ax.legend()
 
 
-def plot_event(df, geo=None):
+def plot_event(df, geo=None, outfile=None):
     fig = plt.figure(figsize=(8,6))
     ax = plt.subplot(projection='3d')
     ax.set_xlabel('pos.x [m]', fontsize=16, labelpad=-25)
@@ -41,4 +41,8 @@ def plot_event(df, geo=None):
     cb.set_label(label='time [ns]', size='x-large')
     cb.ax.tick_params(labelsize='x-large')
 
-    plt.show()
+    if outfile is None:
+        plt.show()
+
+    else:
+        plt.savefig(outfile, dpi=300)
