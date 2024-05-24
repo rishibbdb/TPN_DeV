@@ -75,8 +75,8 @@ meta_keys['spline_mpe'] = 'SplineMPEIC'
 meta_keys['mc_muon_energy_at_interaction'] = 'TrueMuonEnergyAtInteraction'
 meta_keys['mc_muon_energy_at_detector_entry']  = 'TrueMuoneEnergyAtDetectorEntry'
 meta_keys['mc_muon_energy_at_detector_leave'] = 'TrueMuoneEnergyAtDetectorLeave'
-min_muon_energy_at_detector = 1000 # GeV
-max_muon_energy_at_detector = 10000 # GeV
+min_muon_energy_at_detector = 10000 # GeV
+max_muon_energy_at_detector = 100000 # GeV
 
 # in old datsets, the background I3MCTree is kept separately
 # from the I3MCTree. Hence checking for coincident events depends
@@ -249,10 +249,9 @@ for infile in infiles:
 df_pulses = pd.concat(pulse_frames)
 df_meta = pd.concat(meta_frames)
 
-ofile = os.path.join(outdir, f"pulses_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}.ftr")
+ofile = os.path.join(outdir, f"pulses_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}_10_to_100TeV.ftr")
 df_pulses.reset_index(drop=True).to_feather(ofile, compression='zstd')
-ofile = os.path.join(outdir, f"meta_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}.ftr")
+ofile = os.path.join(outdir, f"meta_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}_10_to_100TeV.ftr")
 df_meta.reset_index(drop=True).to_feather(ofile, compression='zstd')
 
-ofile =  f"meta_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}.ftr"
 print(f"stored {event_count} events in outfile {ofile}")
