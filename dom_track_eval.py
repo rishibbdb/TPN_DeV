@@ -38,13 +38,16 @@ def get_eval_network_doms_and_track(eval_network_v_fn, dtype=jnp.float64):
                           jnp.repeat(track_zenith, len(closest_approach_dist)),
                           jnp.repeat(track_azimuth, len(closest_approach_dist))])
 
+        # Cast to dtype. Enables network evaluation in fp32.
+        # Which is significantly faster for consumer gpus
+        # at essentially no loss of accuracy.
         x = jnp.array(x, dtype=dtype)
 
         x_prime = transform_network_inputs_v(x)
         y_pred = eval_network_v_fn(x_prime)
         logits, av, bv = transform_network_outputs_v(y_pred)
 
-        # cast to float64
+        # Cast to float64. Likelihoods need double precision.
         logits = jnp.array(logits, dtype=jnp.float64)
         av = jnp.array(av, dtype=jnp.float64)
         bv = jnp.array(bv, dtype=jnp.float64)
