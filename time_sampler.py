@@ -43,7 +43,7 @@ def sample_times_clean(eval_network_doms_track_fn: Any,
     for i in range(n_doms):
         first_times[i] = np.amin(times[:charges[i], i])
 
-    return first_times + geo_time + track_time
+    return jnp.array(first_times + geo_time + track_time, dtype=jnp.float64)
 
 
 from lib.geo import cherenkov_cylinder_coordinates_v

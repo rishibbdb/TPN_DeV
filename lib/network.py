@@ -6,7 +6,7 @@ import os
 import jax
 
 
-def get_network_eval_fn(bpath: str = '../../data/network/', n_layer=9):
+def get_network_eval_fn(bpath: str = '../../data/network/', n_layer=9, dtype=jnp.float64):
     """
     """
     params = []
@@ -14,7 +14,10 @@ def get_network_eval_fn(bpath: str = '../../data/network/', n_layer=9):
     for i in range(0, n_layer):
         layer_weights = np.load(os.path.join(bpath, f'dense_{i}_weights.npy'))
         layer_bias = np.load(os.path.join(bpath, f'dense_{i}_bias.npy'))
-        params.append((jnp.array(layer_weights), jnp.array(layer_bias)))
+        params.append((
+                        jnp.array(layer_weights, dtype=dtype),
+                        jnp.array(layer_bias, dtype=dtype)
+                    ))
 
     params = tuple(params)
 
@@ -43,10 +46,10 @@ def get_network_eval_fn(bpath: str = '../../data/network/', n_layer=9):
     return eval_network
 
 
-def get_network_eval_v_fn(bpath: str = '../../data/network/', n_layer=9):
+def get_network_eval_v_fn(bpath: str = '../../data/network/', n_layer=9, dtype=jnp.float64):
     """
     """
-    eval_network = get_network_eval_fn(bpath = bpath, n_layer=n_layer)
+    eval_network = get_network_eval_fn(bpath = bpath, n_layer=n_layer, dtype=dtype)
     eval_network_v = jax.jit(jax.vmap(eval_network, 0, 0))
     return eval_network_v
 

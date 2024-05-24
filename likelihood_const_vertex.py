@@ -5,7 +5,7 @@ from tensorflow_probability.substrates import jax as tfp
 tfd = tfp.distributions
 
 
-def get_neg_mpe_llh_fix_vertex(eval_network_doms_and_track_fn, event_data, track_vertex, track_time, eps=jnp.float64(1.e-20)):
+def get_neg_mpe_llh_const_vertex(eval_network_doms_and_track_fn, event_data, track_vertex, track_time, eps=jnp.float64(1.e-20), dtype=jnp.float64):
 
     @jax.jit
     def neg_mpe_llh_direction(track_direction):
@@ -34,8 +34,7 @@ def get_neg_mpe_llh_fix_vertex(eval_network_doms_and_track_fn, event_data, track
         n_photons = event_data[:, 4]
 
         delay_time = first_hit_times - (geo_time + track_time)
-        llh = n_photons * gm.prob(delay_time) * (1-gm.cdf(delay_time))**(n_photons-1)
-        llh = llh + eps
-        return -2*jnp.sum(llh)
+        llh = jnp.sum(jnp.log(n_photons * gm.prob(delay_time) * (1-gm.cdf(delay_time))**(n_photons-1) + eps))
+        return -2*llh
 
     return neg_mpe_llh_direction

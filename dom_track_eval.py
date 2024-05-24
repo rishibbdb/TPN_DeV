@@ -7,7 +7,7 @@ from lib.geo import get_xyz_from_zenith_azimuth
 from lib.trafos import transform_network_outputs_v, transform_network_inputs_v
 
 
-def get_eval_network_doms_and_track(eval_network_v_fn):
+def get_eval_network_doms_and_track(eval_network_v_fn, dtype=jnp.float64):
     """
     network eval function (vectorized across doms)
     """
@@ -38,9 +38,18 @@ def get_eval_network_doms_and_track(eval_network_v_fn):
                           jnp.repeat(track_zenith, len(closest_approach_dist)),
                           jnp.repeat(track_azimuth, len(closest_approach_dist))])
 
+        x = jnp.array(x, dtype=dtype)
+
         x_prime = transform_network_inputs_v(x)
         y_pred = eval_network_v_fn(x_prime)
         logits, av, bv = transform_network_outputs_v(y_pred)
+
+        # cast to float64
+        logits = jnp.array(logits, dtype=jnp.float64)
+        av = jnp.array(av, dtype=jnp.float64)
+        bv = jnp.array(bv, dtype=jnp.float64)
+        geo_time = jnp.array(geo_time, dtype=jnp.float64)
+
         return logits, av, bv, geo_time
 
     return eval_network_doms_and_track
