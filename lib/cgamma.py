@@ -1,13 +1,47 @@
 import jax.numpy as jnp
 import jax
+import numpy as np
+
 
 @jax.jit
-def gamma_conv_jax_exact(x, a, b, sigma=3):
-    '''
+def c_gamma(x, a, b, sigma=3.0, delta=0.5):
+    # x < crit_x - delta => region 4
+    # x > crit_x + delta => region 5
+    # else: exact evaluation => region 1
+    # makes a piecewise defined function
+    # that ensures stable gradients.
+    crit_x = b * sigma**2
+
+    cond_region1 = jnp.logical_and(x < crit_x+delta, x > crit_x-delta)
+    x_region1 = jnp.where(cond_region1, x, crit_x)
+
+    cond_region3 = x >= crit_x+delta
+    x_region3 = jnp.where(cond_region3, x, crit_x+delta)
+
+    cond_region4 = x <= crit_x-delta
+    x_region4 = jnp.where(cond_region4, x, crit_x-delta)
+
+
+    yvals_region1 = _c_gamma_region1(x_region1, a, b, sigma=sigma)
+    yvals_region3 = _c_gamma_region3(x_region3, a, b, sigma=sigma)
+    yvals_region4 = _c_gamma_region4(x_region4, a, b, sigma=sigma)
+
+    result1 = jnp.where(cond_region1, yvals_region1, 0.0)
+    result3 = jnp.where(cond_region3, yvals_region3, 0.0)
+    result4 = jnp.where(cond_region4, yvals_region4, 0.0)
+
+    return result1 + result3 + result4
+
+
+@jax.jit
+def _c_gamma_region1(x, a, b, sigma=3):
+    """
     Implements convolution of gamma distribution with a normal distribution.
     Such distribution arises from adding gaussian noise to samples from a gamma distribution.
     See eq. 7 of arXiv:0704.1706 [astro-ph]. Used for region 1.
-    '''
+    This is the most "exact" calculation, relying on direct eval of hyp1f1
+    """
+
     eta = b*sigma - x/sigma
     s_eta_sq = 0.5 * eta**2 # argument to hyp1f1 is always positive.
 
@@ -18,11 +52,14 @@ def gamma_conv_jax_exact(x, a, b, sigma=3):
 
 
 @jax.jit
-def gamma_conv_jax_region3(x, a, b, sigma=3):
-    # arXiv:0704.1706, eq. 12
-    # t >= rho sigma^2, a >= 1
-    # https://github.com/icecube/icetray/blob/7195b9ad8a76b22e0d7a1e9238147952b1645254/rpdf/private/rpdf/pandel.cxx#L207
-    # Note: a := ksi
+def _c_gamma_region3(x, a, b, sigma=3):
+    """
+    arXiv:0704.1706, eq. 12
+    t >= rho sigma^2, a >= 1
+    https://github.com/icecube/icetray/blob/7195b9ad8a76b22e0d7a1e9238147952b1645254/rpdf/private/rpdf/pandel.cxx#L207
+    Note: a := ksi
+    """
+
     M_LN2 = jnp.log(2.0)
     rhosigma = b*sigma
     eta = rhosigma - x/sigma
@@ -54,11 +91,14 @@ def gamma_conv_jax_region3(x, a, b, sigma=3):
 
 
 @jax.jit
-def gamma_conv_jax_region4(x, a, b, sigma=3):
-    # arXiv:0704.1706, eq. 13
-    # https://github.com/icecube/icetray/blob/e773449cfbb9e505dbcdeb3ae84242505fb7f253/rpdf/private/rpdf/pandel.cxx#L237
-    # t <= rho sigma^2, a >= 1
-    # Note: a := ksi
+def _c_gamma_region4(x, a, b, sigma=3):
+    """
+    arXiv:0704.1706, eq. 13
+    https://github.com/icecube/icetray/blob/e773449cfbb9e505dbcdeb3ae84242505fb7f253/rpdf/private/rpdf/pandel.cxx#L237
+    t <= rho sigma^2, a >= 1
+    Note: a := ksi
+    """
+
     M_SQRTPI = jnp.sqrt(np.pi)
     M_E = jnp.exp(1.0)
     M_SQRT2 = jnp.sqrt(2.0)
