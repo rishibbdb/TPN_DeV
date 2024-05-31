@@ -4,7 +4,7 @@ import numpy as np
 
 
 @jax.jit
-def c_gamma(x, a, b, sigma=3.0, delta=0.5):
+def c_gamma_prob(x, a, b, sigma=3.0, delta=10.0):
     # x < crit_x - delta => region 4
     # x > crit_x + delta => region 5
     # else: exact evaluation => region 1
