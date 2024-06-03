@@ -2,6 +2,17 @@ import jax.numpy as jnp
 import jax
 import numpy as np
 
+@jax.jit
+def c_multi_gamma_prob(x, mix_probs, a, b, sigma=3.0, delta=10.0):
+    # todo: consider exploring logsumexp trick (potentially more stable)
+    # e.g. https://github.com/tensorflow/probability/blob/65f265c62bb1e2d15ef3e25104afb245a6d52429/tensorflow_probability/python/distributions/mixture_same_family.py#L348
+    # for now: implement naive mixture probs
+    return jnp.sum(mix_probs * c_gamma_prob(x, a, b, sigma, delta), axis=-1)
+
+c_multi_gamma_prob_v = jax.jit(jax.vmap(c_multi_gamma_prob,
+                                        (0, 0, 0, 0, None, None),
+                                        0))
+
 
 @jax.jit
 def c_gamma_prob(x, a, b, sigma=3.0, delta=10.0):
@@ -31,6 +42,8 @@ def c_gamma_prob(x, a, b, sigma=3.0, delta=10.0):
     result4 = jnp.where(cond_region4, yvals_region4, 0.0)
 
     return result1 + result3 + result4
+
+c_gamma_prob_v = jax.jit(jax.vmap(c_gamma_prob, (0, 0, 0, None, None), 0))
 
 
 @jax.jit
