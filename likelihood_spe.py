@@ -2,6 +2,7 @@ from lib.cgamma import c_multi_gamma_prob_v
 import jax
 import jax.numpy as jnp
 
+
 def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
     """
     here would be a smart docstring
@@ -55,3 +56,14 @@ def get_llh_and_grad_fs_for_iminuit_migrad(eval_network_doms_and_track):
     grad_neg_llh_5D = jax.jit(jax.grad(neg_llh_5D, argnums=0))
 
     return neg_llh_5D, grad_neg_llh_5D
+
+
+def get_llh_and_grad_fs_for_iminuit_migrad_profile(eval_network_doms_and_track):
+    """
+    """
+    neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
+
+	# this gradient is 3D (vertex) not 5D (vertex + direction)
+    grad_neg_llh_3D = jax.jit(jax.grad(neg_llh, argnums=1))
+
+    return neg_llh, grad_neg_llh_3D
