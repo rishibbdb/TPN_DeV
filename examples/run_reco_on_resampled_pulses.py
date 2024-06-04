@@ -20,7 +20,7 @@ from lib.network import get_network_eval_v_fn
 
 from dom_track_eval import get_eval_network_doms_and_track
 from time_sampler import sample_times_clean
-from likelihood_const_vertex import get_neg_mpe_llh_const_vertex
+from legacy.likelihood_const_vertex import get_neg_mpe_llh_const_vertex
 
 from palettable.cubehelix import Cubehelix
 cx =Cubehelix.make(start=0.3, rotation=-0.5, n=16, reverse=False, gamma=1.0,
