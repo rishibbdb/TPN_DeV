@@ -3,11 +3,12 @@
 from iminuit import Minuit
 import sys, os
 sys.path.insert(0, "/home/storage/hans/jax_reco")
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import jax.numpy as jnp
 import jax
 jax.config.update("jax_enable_x64", True)
+from jax.scipy import optimize
 
 import pandas as pd
 import numpy as np
@@ -18,8 +19,7 @@ from lib.simdata_i3 import I3SimHandlerFtr
 from lib.geo import center_track_pos_and_time_based_on_data
 from lib.network import get_network_eval_v_fn
 from dom_track_eval import get_eval_network_doms_and_track
-from likelihood_spe import get_llh_and_grad_fs_for_iminuit_migrad
-from likelihood_spe import get_llh_and_grad_fs_for_iminuit_migrad_profile
+from likelihood_spe import get_neg_c_triple_gamma_llh
 
 from palettable.cubehelix import Cubehelix
 cx =Cubehelix.make(start=0.3, rotation=-0.5, n=16, reverse=False, gamma=1.0,
@@ -33,7 +33,7 @@ dzen = 0.1 # rad
 dazi = 0.1 # rad
 
 # Event Index.
-event_index = 0
+event_index = 1
 
 # Get network and eval logic.
 eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/network')
@@ -70,48 +70,51 @@ n_photons = np.round(event_data['charge'].to_numpy()+0.5)
 # Combine into single data tensor for fitting.
 fitting_event_data = jnp.array(event_data[['x', 'y', 'z', 'time']].to_numpy())
 
-obj_fn, obj_grad = get_llh_and_grad_fs_for_iminuit_migrad(eval_network_doms_and_track)
 
-# put the thing below into a for loop if you want to reconstruct many events (without jit-recompiling everything)
-f_prime = lambda x: obj_fn(x, centered_track_time, fitting_event_data)
-grad_prime = lambda x: obj_grad(x, centered_track_time, fitting_event_data)
+method="BFGS"
+#method="l-bfgs-experimental-do-not-rely-on-this"
+
+# Setup likelihood
+neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
+
+@jax.jit
+def neg_llh_5D(x, track_time, data):
+    return neg_llh(x[:2], x[2:], track_time, data)
+
+@jax.jit
+def minimize_bfgs(x0, track_time, data):
+    result = optimize.minimize(neg_llh_5D,
+                                x0,
+                                args=(track_time, data),
+                                method=method)
+    return result.fun, result.x
 
 x0 = jnp.concatenate([track_src, centered_track_pos])
-m = Minuit(f_prime, x0, grad=grad_prime)
-m.errordef = Minuit.LIKELIHOOD
-m.limits = ((0.0, np.pi), (0.0, 2.0 * np.pi), (-500.0, 500.0),  (-500.0, 500.0),  (-500.0, 500.0))
-m.strategy = 0
-m.migrad()
+best_logl, best_x = minimize_bfgs(x0, centered_track_time, fitting_event_data)
 
 print("best fit done. starting scan.")
 
-# Now do the scan.
-obj_f, obj_grad = get_llh_and_grad_fs_for_iminuit_migrad_profile(eval_network_doms_and_track)
 
-def lets_profile(track_dir, obj_fn, obj_grad, vertex_seed, time, data):
-    f_prime = lambda x: obj_fn(track_dir, x, time, data)
-    grad_prime = lambda x: obj_grad(track_dir, x, time, data)
+@jax.jit
+def neg_llh_3D(x, track_dir, track_time, data):
+	return neg_llh(track_dir, x, track_time, data)
 
-    x0 = jnp.array(vertex_seed)
-    m = Minuit(f_prime, x0, grad=grad_prime)
-    m.errordef = Minuit.LIKELIHOOD
-    m.limits = ((-500.0, 500.0),  (-500.0, 500.0),  (-500.0, 500.0))
-    m.strategy = 0
-    m.migrad()
-    return m.fval
+@jax.jit
+def minimize_bfgs_profile(track_dir, x0, track_time, data):
+	return optimize.minimize(neg_llh_3D,
+                             x0,
+                             args=(track_dir,
+                                   track_time,
+                                   data),
+                             method=method).fun
+
+profile_w_bfgs = jax.jit(jax.vmap(minimize_bfgs_profile, (0, None, None, None), 0))
 
 zenith = jnp.linspace(track_src[0]-dzen, track_src[0]+dazi, n_eval)
 azimuth = jnp.linspace(track_src[1]-dzen, track_src[1]+dazi, n_eval)
 X, Y = jnp.meshgrid(zenith, azimuth)
 init_dirs = jnp.column_stack([X.flatten(), Y.flatten()])
-logls = np.zeros(len(init_dirs))
-
-for i, tdir in enumerate(init_dirs):
-    logls[i] = lets_profile(tdir, obj_f, obj_grad,
-            centered_track_pos,
-            centered_track_time,
-            fitting_event_data)
-
+logls = profile_w_bfgs(init_dirs, centered_track_pos, centered_track_time, fitting_event_data)
 logls = logls.reshape(X.shape)
 
 fig, ax = plt.subplots()
@@ -136,8 +139,8 @@ smpe_zenith = meta['spline_mpe_zenith']
 smpe_azimuth = meta['spline_mpe_azimuth']
 ax.scatter(np.rad2deg([smpe_zenith]), np.rad2deg([smpe_azimuth]), marker="x", color='lime', label='splineMPE')
 
-zenith = m.values[0]
-azimuth = m.values[1]
+zenith = best_x[0]
+azimuth = best_x[1]
 ax.scatter(np.rad2deg(zenith), np.rad2deg(azimuth), marker='+', color='magenta', label='migrad')
 
 contours = [4.61]

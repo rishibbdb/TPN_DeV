@@ -8,6 +8,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import jax.numpy as jnp
 import jax
 jax.config.update("jax_enable_x64", True)
+from jax.scipy import optimize
 
 import pandas as pd
 import numpy as np
@@ -15,7 +16,7 @@ from lib.simdata_i3 import I3SimHandlerFtr
 from lib.geo import center_track_pos_and_time_based_on_data
 from lib.network import get_network_eval_v_fn
 from dom_track_eval import get_eval_network_doms_and_track
-from likelihood_spe import get_llh_and_grad_fs_for_iminuit_migrad
+from likelihood_spe import get_neg_c_triple_gamma_llh
 
 # Event Index.
 event_index = 1
@@ -55,26 +56,31 @@ n_photons = np.round(event_data['charge'].to_numpy()+0.5)
 # Combine into single data tensor for fitting.
 fitting_event_data = jnp.array(event_data[['x', 'y', 'z', 'time']].to_numpy())
 
-obj_fn, obj_grad = get_llh_and_grad_fs_for_iminuit_migrad(eval_network_doms_and_track)
+# Setup likelihood
+neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
 
-# put the thing below into a for loop if you want to reconstruct many events (without jit-recompiling everything)
-f_prime = lambda x: obj_fn(x, centered_track_time, fitting_event_data)
-grad_prime = lambda x: obj_grad(x, centered_track_time, fitting_event_data)
+@jax.jit
+def neg_llh_5D(x, track_time, data):
+    return neg_llh(x[:2], x[2:], track_time, data)
+
+@jax.jit
+def minimize_bfgs(x0, track_time, data):
+    result = optimize.minimize(neg_llh_5D,
+                                x0,
+                                args=(track_time, data),
+                                method="BFGS")
+    return result.fun, result.x
 
 x0 = jnp.concatenate([track_src, centered_track_pos])
-m = Minuit(f_prime, x0, grad=grad_prime)
-m.errordef = Minuit.LIKELIHOOD
-m.limits = ((0.0, np.pi), (0.0, 2.0 * np.pi), (-500.0, 500.0),  (-500.0, 500.0),  (-500.0, 500.0))
-m.strategy = 0
-m.migrad()
+best_logl, best_x = minimize_bfgs(x0, centered_track_time, fitting_event_data)
 
 print("... solution found.")
-print(f"-2*logl={m.fval:.3f}")
-print(f"zenith={m.values[0]:.3f}rad")
-print(f"azimuth={m.values[1]:.3f}rad")
-print(f"x={m.values[2]:.3f}m")
-print(f"y={m.values[3]:.3f}m")
-print(f"z={m.values[4]:.3f}m")
+print(f"-2*logl={best_logl:.3f}")
+print(f"zenith={best_x[0]:.3f}rad")
+print(f"azimuth={best_x[1]:.3f}rad")
+print(f"x={best_x[2]:.3f}m")
+print(f"y={best_x[3]:.3f}m")
+print(f"z={best_x[4]:.3f}m")
 print(f"at fix time t={centered_track_time:.3f}ns")
 
 
