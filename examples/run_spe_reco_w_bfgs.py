@@ -3,7 +3,7 @@
 from iminuit import Minuit
 import sys, os
 sys.path.insert(0, "/home/storage/hans/jax_reco")
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import jax.numpy as jnp
 import jax
@@ -59,28 +59,30 @@ fitting_event_data = jnp.array(event_data[['x', 'y', 'z', 'time']].to_numpy())
 # Setup likelihood
 neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
 
+scale = 10.0
 @jax.jit
 def neg_llh_5D(x, track_time, data):
-    return neg_llh(x[:2], x[2:], track_time, data)
+    return neg_llh(x[:2], x[2:]*scale, track_time, data)
 
 @jax.jit
 def minimize_bfgs(x0, track_time, data):
     result = optimize.minimize(neg_llh_5D,
                                 x0,
                                 args=(track_time, data),
-                                method="BFGS")
+                                method="BFGS",
+                                options={'maxiter':50, 'gtol':1.e-5})
     return result.fun, result.x
 
-x0 = jnp.concatenate([track_src, centered_track_pos])
+x0 = jnp.concatenate([track_src, centered_track_pos/scale])
 best_logl, best_x = minimize_bfgs(x0, centered_track_time, fitting_event_data)
 
 print("... solution found.")
 print(f"-2*logl={best_logl:.3f}")
 print(f"zenith={best_x[0]:.3f}rad")
 print(f"azimuth={best_x[1]:.3f}rad")
-print(f"x={best_x[2]:.3f}m")
-print(f"y={best_x[3]:.3f}m")
-print(f"z={best_x[4]:.3f}m")
+print(f"x={best_x[2]*scale:.3f}m")
+print(f"y={best_x[3]*scale:.3f}m")
+print(f"z={best_x[4]*scale:.3f}m")
 print(f"at fix time t={centered_track_time:.3f}ns")
 
 

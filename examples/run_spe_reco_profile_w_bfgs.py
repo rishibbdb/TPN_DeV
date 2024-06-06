@@ -3,7 +3,7 @@
 from iminuit import Minuit
 import sys, os
 sys.path.insert(0, "/home/storage/hans/jax_reco")
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import jax.numpy as jnp
 import jax
@@ -94,19 +94,21 @@ best_logl, best_x = minimize_bfgs(x0, centered_track_time, fitting_event_data)
 
 print("best fit done. starting scan.")
 
+scale = 10.0
 
 @jax.jit
 def neg_llh_3D(x, track_dir, track_time, data):
-	return neg_llh(track_dir, x, track_time, data)
+	return neg_llh(track_dir, x*scale, track_time, data)
 
 @jax.jit
 def minimize_bfgs_profile(track_dir, x0, track_time, data):
 	return optimize.minimize(neg_llh_3D,
-                             x0,
+                             x0/scale,
                              args=(track_dir,
                                    track_time,
                                    data),
-                             method=method).fun
+                             method=method,
+                             options={'maxiter':50, 'gtol':1.e-3}).fun
 
 profile_w_bfgs = jax.jit(jax.vmap(minimize_bfgs_profile, (0, None, None, None), 0))
 
@@ -141,7 +143,7 @@ ax.scatter(np.rad2deg([smpe_zenith]), np.rad2deg([smpe_azimuth]), marker="x", co
 
 zenith = best_x[0]
 azimuth = best_x[1]
-ax.scatter(np.rad2deg(zenith), np.rad2deg(azimuth), marker='+', color='magenta', label='migrad')
+ax.scatter(np.rad2deg(zenith), np.rad2deg(azimuth), marker='+', color='magenta', label='bfgs')
 
 contours = [4.61]
 ix1, ix2 = np.where(delta_logl==0)
