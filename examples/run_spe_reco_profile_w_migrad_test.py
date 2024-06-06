@@ -54,14 +54,28 @@ event_data = sim_handler.get_per_dom_summary_from_sim_data(meta, pulses)
 print("n_doms", len(event_data))
 
 # Make MCTruth seed.
-track_pos = jnp.array([meta['muon_pos_x'], meta['muon_pos_y'], meta['muon_pos_z']])
-track_time = meta['muon_time']
-track_zenith = meta['muon_zenith']
-track_azimuth = meta['muon_azimuth']
+#track_pos = jnp.array([meta['muon_pos_x'], meta['muon_pos_y'], meta['muon_pos_z']])
+#track_time = meta['muon_time']
+#track_zenith = meta['muon_zenith']
+#track_azimuth = meta['muon_azimuth']
+#track_src = jnp.array([track_zenith, track_azimuth])
+
+true_track_zenith = meta['muon_zenith']
+true_track_azimuth = meta['muon_azimuth']
+true_track_src = jnp.array([true_track_zenith, true_track_azimuth])
+
+track_pos = jnp.array([meta['spline_mpe_pos_x'], meta['spline_mpe_pos_y'], meta['spline_mpe_pos_z']])
+track_time = meta['spline_mpe_time']
+track_zenith = meta['spline_mpe_zenith']
+track_azimuth = meta['spline_mpe_azimuth']
 track_src = jnp.array([track_zenith, track_azimuth])
 
+
 print("original seed vertex:", track_pos)
-centered_track_pos, centered_track_time = center_track_pos_and_time_based_on_data(event_data, track_pos, track_time, track_src)
+#centered_track_pos, centered_track_time = center_track_pos_and_time_based_on_data(event_data, track_pos, track_time, track_src)
+centered_track_pos = track_pos
+centered_track_time = track_time
+centered_track_time = centered_track_time
 print("shifted seed vertex:", centered_track_pos)
 
 # Create some n_photons from qtot (by rounding up).
@@ -130,7 +144,7 @@ ax.set_xlim(np.rad2deg([track_src[0]-dzen, track_src[0]+dzen]))
 ax.set_ylim(np.rad2deg([track_src[1]-dazi, track_src[1]+dazi]))
 ax.tick_params(axis='both', which='both', width=1.5, colors='0.0', labelsize=16)
 
-ax.scatter(np.rad2deg(track_src[0]), np.rad2deg(track_src[1]), marker="*", color='red', label="truth", zorder=200)
+ax.scatter(np.rad2deg(true_track_src[0]), np.rad2deg(true_track_src[1]), marker="*", color='red', label="truth", zorder=200)
 
 smpe_zenith = meta['spline_mpe_zenith']
 smpe_azimuth = meta['spline_mpe_azimuth']

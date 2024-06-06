@@ -3,7 +3,7 @@
 from iminuit import Minuit
 import sys, os
 sys.path.insert(0, "/home/storage/hans/jax_reco")
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import jax.numpy as jnp
 import jax
@@ -98,26 +98,38 @@ scale = 10.0
 
 @jax.jit
 def neg_llh_3D(x, track_dir, track_time, data):
-	return neg_llh(track_dir, x*scale, track_time, data)
+	return neg_llh(track_dir/scale, x*scale, track_time, data)
 
 @jax.jit
 def minimize_bfgs_profile(track_dir, x0, track_time, data):
 	return optimize.minimize(neg_llh_3D,
                              x0/scale,
-                             args=(track_dir,
+                             args=(track_dir*scale,
                                    track_time,
                                    data),
                              method=method,
                              options={'maxiter':50, 'gtol':1.e-3}).fun
 
-profile_w_bfgs = jax.jit(jax.vmap(minimize_bfgs_profile, (0, None, None, None), 0))
+
 
 zenith = jnp.linspace(track_src[0]-dzen, track_src[0]+dazi, n_eval)
 azimuth = jnp.linspace(track_src[1]-dzen, track_src[1]+dazi, n_eval)
 X, Y = jnp.meshgrid(zenith, azimuth)
 init_dirs = jnp.column_stack([X.flatten(), Y.flatten()])
-logls = profile_w_bfgs(init_dirs, centered_track_pos, centered_track_time, fitting_event_data)
+
+# This is currently slow for unknown reasons. Todo: need to figure out why.
+# Relying on jax.vmap should be faster than manual loop.
+#profile_w_bfgs = jax.jit(jax.vmap(minimize_bfgs_profile, (0, None, None, None), 0))
+#logls = profile_w_bfgs(init_dirs, centered_track_pos, centered_track_time, fitting_event_data)
+#logls = logls.reshape(X.shape)
+
+logls = np.zeros(len(init_dirs))
+
+for i, tdir in enumerate(init_dirs):
+    logls[i] = minimize_bfgs_profile(tdir,  centered_track_pos, centered_track_time, fitting_event_data)
+
 logls = logls.reshape(X.shape)
+
 
 fig, ax = plt.subplots()
 min_logl = np.amin(logls)
