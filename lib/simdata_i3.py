@@ -41,9 +41,10 @@ class I3SimHandlerFtr:
 
 class I3SimBatchHandler:
     @tf.autograph.experimental.do_not_convert
-    def __init__(self, sim_handler, process_n_events=None):
+    def __init__(self, sim_handler, process_n_events=None, batch_size=256):
         self.sim_handler = sim_handler
         self.n_events = len(sim_handler.events_meta)
+        self.batch_size = batch_size
         if process_n_events is not None:
             self.n_events = process_n_events
 
@@ -69,7 +70,7 @@ class I3SimBatchHandler:
         ds = ds.bucket_by_sequence_length(
                     element_length_func = _element_length_funct,
                     bucket_boundaries = np.logspace(1, np.log10(n_doms_max), n_bins+1).astype(int).tolist(),
-                    bucket_batch_sizes = [128]*(n_bins+2),
+                    bucket_batch_sizes = [self.batch_size]*(n_bins+2),
                     drop_remainder = False,
                     pad_to_bucket_boundary=True
                 )
@@ -82,7 +83,6 @@ class I3SimBatchHandler:
 
     def _get_event_data(self, event_index):
         meta, pulses = self.sim_handler.get_event_data(event_index)
-        #print(f"muon energy: {meta['muon_energy_at_detector']/1.e3:.1f} TeV")
 
         # Get dom locations, first hit times, and total charges (for each dom).
         event_data = self.sim_handler.get_per_dom_summary_from_sim_data(meta, pulses)

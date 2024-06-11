@@ -41,6 +41,7 @@ def get_network_eval_fn(bpath: str = '../../data/network/', n_layer=9, dtype=jnp
         # outputs
         y = jnp.tanh(jnp.dot(x, params[7][0]) + params[7][1])
         z = jnp.dot(y, params[8][0]) + params[8][1]
+
         return z
 
     return eval_network
