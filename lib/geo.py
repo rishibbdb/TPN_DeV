@@ -21,6 +21,20 @@ def center_track_pos_and_time_based_on_data(event_data: pd.DataFrame, track_pos,
     centered_track_pos = track_pos + (centered_track_time - track_time) * __c * track_dir_xyz
     return jnp.array(centered_track_pos), jnp.float64(centered_track_time)
 
+def center_track_pos_and_time_based_on_data_batched(data, mctruth):
+    track_dir = mctruth[2:4]
+    track_time = mctruth[4]
+    track_pos = mctruth[5:8]
+
+    track_dir_xyz = get_xyz_from_zenith_azimuth(track_dir)
+    charge = data[:, 4]
+    time = data[:, 3]
+
+    centered_track_time = np.sum(charge * time) / np.sum(charge)
+    centered_track_pos = track_pos + (centered_track_time - track_time) * __c * track_dir_xyz
+    return jnp.array(centered_track_pos), jnp.float64(centered_track_time)
+
+center_track_pos_and_time_based_on_data_batched_v = jax.jit(jax.vmap(center_track_pos_and_time_based_on_data_batched, (0, 0), (0, 0)))
 
 @jax.jit
 def geo_time(dom_pos, track_pos, track_dir):

@@ -24,15 +24,7 @@ from palettable.cubehelix import Cubehelix
 cx =Cubehelix.make(start=0.3, rotation=-0.5, n=16, reverse=False, gamma=1.0,
                            max_light=1.0,max_sat=0.5, min_sat=1.4).get_mpl_colormap()
 
-# Number of scan points on 1D
-n_eval = 50 # making it a 20x20 grid
-
-# Scan range (truth +/- dzen, +/- dazi)
-dzen = 0.05 # rad
-dazi = 0.05 # rad
-
-# Event Index.
-event_index = 1
+event_index = 0
 
 # Get network and eval logic.
 eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/network')
