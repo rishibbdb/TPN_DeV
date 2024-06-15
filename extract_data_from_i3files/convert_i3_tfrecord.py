@@ -7,7 +7,15 @@ import numpy as np
 import glob
 import os, sys
 
+import tensorflow as tf
+
 from _lib.pulse_extraction_from_i3 import get_pulse_info
+from _lib.tfrecords_utils import serialize_example
+
+sys.path.insert(0, "/home/storage/hans/jax_reco_new/")
+from lib.simdata_i3 import I3SimHandler
+
+
 
 from argparse import ArgumentParser
 
@@ -249,9 +257,35 @@ for infile in infiles:
 df_pulses = pd.concat(pulse_frames)
 df_meta = pd.concat(meta_frames)
 
-ofile = os.path.join(outdir, f"pulses_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}_10_to_100TeV.ftr")
-df_pulses.reset_index(drop=True).to_feather(ofile, compression='zstd')
-ofile = os.path.join(outdir, f"meta_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}_10_to_100TeV.ftr")
-df_meta.reset_index(drop=True).to_feather(ofile, compression='zstd')
+compression_type = ''
+options = tf.io.TFRecordOptions(compression_type=compression_type)
 
-print(f"stored {event_count} events in outfile {ofile}")
+geo_file = "/home/storage/hans/jax_reco_new/data/icecube/detector_geometry.csv"
+sim_handler = I3SimHandler(df_meta = df_meta,
+                            df_pulses = df_pulses,
+                            geo_file = geo_file)
+
+write_path = os.path.join(outdir, f"data_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}_10_to_100TeV.tfrecord")
+with tf.io.TFRecordWriter(write_path, options) as writer:
+
+    # Loop over events, and write to tfrecords file.
+    for i in range(len(df_meta)):
+        meta, pulses = sim_handler.get_event_data(i)
+
+    # Get dom locations, first hit times, and total charges (for each dom).
+        event_data = sim_handler.get_per_dom_summary_from_sim_data(meta, pulses)
+
+        x = event_data[['x', 'y','z','time', 'charge']].to_numpy()
+        y = meta[['muon_energy_at_detector', 'q_tot', 'muon_zenith', 'muon_azimuth', 'muon_time',
+                      'muon_pos_x', 'muon_pos_y', 'muon_pos_z', 'spline_mpe_zenith',
+                      'spline_mpe_azimuth', 'spline_mpe_time', 'spline_mpe_pos_x',
+                      'spline_mpe_pos_y', 'spline_mpe_pos_z']].to_numpy()
+
+        writer.write(serialize_example(
+                                tf.constant(x, dtype=tf.float64),
+                                tf.constant(y, dtype=tf.float64),
+                            )
+                        )
+
+print(f"stored {event_count} events in outfile {write_path}")
+print(f"stored {i} events in outfile {write_path}")

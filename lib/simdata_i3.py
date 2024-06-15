@@ -8,13 +8,22 @@ try:
 except ImportError:
     print("did not find tensorflow(cpu). can not use batched data loader.")
 
-class I3SimHandlerFtr:
-    def __init__(self, events_meta_file: str,
-                 events_pulses_file: str,
-                 geo_file: str) -> None:
+class I3SimHandler:
+    def __init__(self, events_meta_file: str = None,
+                 events_pulses_file: str = None,
+                 geo_file: str = None,
+                 df_meta: pd.DataFrame = None,
+                 df_pulses: pd.DataFrame = None) -> None:
 
-        self.events_meta = pd.read_feather(events_meta_file)
-        self.events_data = pd.read_feather(events_pulses_file)
+        if ((events_meta_file is not None) and
+                events_pulses_file is not None):
+            self.events_meta = pd.read_feather(events_meta_file)
+            self.events_data = pd.read_feather(events_pulses_file)
+
+        else:
+            self.events_meta = df_meta
+            self.events_data = df_pulses
+
         self.geo = pd.read_csv(geo_file)
 
     def get_event_data(self, event_index: int) -> pd.DataFrame:
@@ -39,7 +48,7 @@ class I3SimHandlerFtr:
         return df
 
 
-class I3SimBatchHandler:
+class I3SimBatchHandlerFtr:
     @tf.autograph.experimental.do_not_convert
     def __init__(self, sim_handler, process_n_events=None, batch_size=256):
         self.sim_handler = sim_handler
@@ -81,20 +90,51 @@ class I3SimBatchHandler:
         return iter(self.tf_dataset)
 
 
-    def _get_event_data(self, event_index):
-        meta, pulses = self.sim_handler.get_event_data(event_index)
+class I3SimBatchHandlerTFRecord:
+    @tf.autograph.experimental.do_not_convert
+    def __init__(self, infile, batch_size=128):
+        self.tf_dataset = tfrecords_reader_dataset(infile, batch_size=batch_size)
 
-        # Get dom locations, first hit times, and total charges (for each dom).
-        event_data = self.sim_handler.get_per_dom_summary_from_sim_data(meta, pulses)
-
-        return (event_data[['x', 'y','z','time', 'charge']].to_numpy(),
-                meta[['muon_energy_at_detector', 'q_tot', 'muon_zenith', 'muon_azimuth', 'muon_time',
-                      'muon_pos_x', 'muon_pos_y', 'muon_pos_z', 'spline_mpe_zenith',
-                      'spline_mpe_azimuth', 'spline_mpe_time', 'spline_mpe_pos_x',
-                      'spline_mpe_pos_y', 'spline_mpe_pos_z']].to_numpy())
+    def get_batch_iterator(self):
+        return iter(self.tf_dataset)
 
 
+def parse_tfr_element(element, n_features=5, n_labels=14):
+  data = {
+      'features': tf.io.FixedLenFeature([], tf.string),
+      'labels': tf.io.FixedLenFeature([], tf.string),
+    }
 
+  content = tf.io.parse_single_example(element, data)
+  labels = content['labels']
+  features = content['features']
+
+  feature = tf.io.parse_tensor(features, out_type=tf.float64)
+  feature = tf.ensure_shape(feature, (None, n_features))
+
+  label = tf.io.parse_tensor(labels, out_type=tf.float64)
+  label = tf.ensure_shape(label, (n_labels,))
+
+  return (feature, label)
+
+
+def tfrecords_reader_dataset(infile, batch_size):
+    dataset = tf.data.TFRecordDataset(infile, compression_type='')
+    dataset = dataset.map(parse_tfr_element, num_parallel_calls=tf.data.AUTOTUNE)
+    dataset = dataset.map(lambda x, y: (x, y), num_parallel_calls=tf.data.AUTOTUNE)
+
+    n_doms_max = 1000
+    n_bins = 8
+    _element_length_funct = lambda x, y: tf.shape(x)[0]
+    dataset = dataset.bucket_by_sequence_length(
+            element_length_func = _element_length_funct,
+            bucket_boundaries = np.logspace(1, np.log10(n_doms_max), n_bins+1).astype(int).tolist(),
+            bucket_batch_sizes = [batch_size]*(n_bins+2),
+            drop_remainder = False,
+            pad_to_bucket_boundary=False,
+        )
+
+    return dataset.prefetch(tf.data.AUTOTUNE)
 
 
 
