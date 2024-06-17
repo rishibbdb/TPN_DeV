@@ -2,19 +2,15 @@ import jax.numpy as jnp
 import jax
 import numpy as np
 
-@jax.jit
 def c_multi_gamma_prob(x, mix_probs, a, b, sigma=3.0, delta=10.0):
     # todo: consider exploring logsumexp trick (potentially more stable)
     # e.g. https://github.com/tensorflow/probability/blob/65f265c62bb1e2d15ef3e25104afb245a6d52429/tensorflow_probability/python/distributions/mixture_same_family.py#L348
     # for now: implement naive mixture probs
     return jnp.sum(mix_probs * c_gamma_prob(x, a, b, sigma, delta), axis=-1)
 
-c_multi_gamma_prob_v = jax.jit(jax.vmap(c_multi_gamma_prob,
-                                        (0, 0, 0, 0, None, None),
-                                        0))
+c_multi_gamma_prob_v = jax.vmap(c_multi_gamma_prob, (0, 0, 0, 0, None, None), 0)
 
 
-@jax.jit
 def c_gamma_prob(x, a, b, sigma=3.0, delta=10.0):
     # x < crit_x - delta => region 4
     # x > crit_x + delta => region 5
@@ -43,10 +39,9 @@ def c_gamma_prob(x, a, b, sigma=3.0, delta=10.0):
 
     return result1 + result3 + result4
 
-c_gamma_prob_v = jax.jit(jax.vmap(c_gamma_prob, (0, 0, 0, None, None), 0))
+c_gamma_prob_v = jax.vmap(c_gamma_prob, (0, 0, 0, None, None), 0)
 
 
-@jax.jit
 def _c_gamma_region1(x, a, b, sigma=3):
     """
     Implements convolution of gamma distribution with a normal distribution.
@@ -64,7 +59,6 @@ def _c_gamma_region1(x, a, b, sigma=3):
     return fac1 * (s1 - np.sqrt(2)*eta*s2)
 
 
-@jax.jit
 def _c_gamma_region3(x, a, b, sigma=3):
     """
     arXiv:0704.1706, eq. 12
@@ -103,7 +97,6 @@ def _c_gamma_region3(x, a, b, sigma=3):
     return jnp.exp(alpha)*phi/jax.scipy.special.gamma(a)/sigma
 
 
-@jax.jit
 def _c_gamma_region4(x, a, b, sigma=3):
     """
     arXiv:0704.1706, eq. 13
