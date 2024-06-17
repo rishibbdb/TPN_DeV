@@ -44,7 +44,7 @@ print(f"muon energy: {meta['muon_energy_at_detector']/1.e3:.1f} TeV")
 event_data = sim_handler.get_per_dom_summary_from_sim_data(meta, pulses)
 
 # Get dom locations, time of first give pulses and corresponding charges.
-event_data_all = sim_handler.get_per_dom_summary_extended_from_index(0, n_pulses=n_pulses)
+event_data_all = sim_handler.get_per_dom_summary_extended_from_index(event_index, n_pulses=n_pulses)
 
 print("n_doms", len(event_data))
 

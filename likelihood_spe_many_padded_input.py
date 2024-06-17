@@ -53,15 +53,21 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn, n_pulses):
         av = jnp.expand_dims(av, 1)
         bv = jnp.expand_dims(bv, 1)
 
-        y = jnp.where(idx_padded_q,
-                      jnp.log(c_multi_gamma_prob_v(safe_delay_time,
+        #y = jnp.where(idx_padded_q,
+        #              jnp.log(c_multi_gamma_prob_v(safe_delay_time,
+        #                                     mix_probs,
+        #                                     av,
+        #                                     bv,
+        #                                     sigma,
+        #                                     delta)),
+        #              0.0)
+
+        y = hit_charges * jnp.log(c_multi_gamma_prob_v(safe_delay_time,
                                              mix_probs,
                                              av,
                                              bv,
                                              sigma,
-                                             delta)),
-                      0.0)
-
+                                             delta))
 
         return -2.0 * jnp.sum(y)
 

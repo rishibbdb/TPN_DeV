@@ -48,6 +48,25 @@ class I3SimHandler:
         df['time'] = df_tmin['time'].values
         return df
 
+    def get_per_dom_summary_extended_from_sim_data(self,
+                                                meta: pd.DataFrame,
+												pulses: pd.DataFrame,
+                                                n_pulses: int=5) -> np.ndarray:
+
+        pulses_sorted = pulses.sort_values(["sensor_id", "time"]).groupby("sensor_id").head(n_pulses)
+        sensors = pulses_sorted['sensor_id'].unique()
+        dom_locations = self.geo.iloc[sensors][["x", "y", "z"]].to_numpy()
+
+        df = pulses_sorted[['sensor_id', 'time', 'charge']].groupby('sensor_id').agg(list).reset_index()
+
+        padded_time = df['time'].apply(lambda row: self._padding(row, n_pulses)).explode().to_numpy()
+        padded_time = np.array(padded_time.reshape((len(sensors), n_pulses))).astype(float)
+
+        padded_charge = df['charge'].apply(lambda row: self._padding(row, n_pulses)).explode().to_numpy()
+        padded_charge = np.array(padded_charge.reshape((len(sensors), n_pulses))).astype(float)
+
+        return np.concatenate([dom_locations, padded_time, padded_charge], axis=1)
+
     def get_per_dom_summary_extended_from_index(self,
                                                 event_index: int,
                                                 n_pulses: int=5) -> np.ndarray:
@@ -56,6 +75,7 @@ class I3SimHandler:
         pulses_sorted = pulses.sort_values(["sensor_id", "time"]).groupby("sensor_id").head(n_pulses)
         sensors = pulses_sorted['sensor_id'].unique()
         dom_locations = self.geo.iloc[sensors][["x", "y", "z"]].to_numpy()
+
         df = pulses_sorted[['sensor_id', 'time', 'charge']].groupby('sensor_id').agg(list).reset_index()
 
         padded_time = df['time'].apply(lambda row: self._padding(row, n_pulses)).explode().to_numpy()
@@ -115,8 +135,11 @@ class I3SimBatchHandlerFtr:
 
 class I3SimBatchHandlerTFRecord:
     @tf.autograph.experimental.do_not_convert
-    def __init__(self, infile, batch_size=128):
-        self.tf_dataset = tfrecords_reader_dataset(infile, batch_size=batch_size)
+    def __init__(self, infile, batch_size=128, n_features=5, n_labels=14):
+        self.tf_dataset = tfrecords_reader_dataset(infile,
+                                                    batch_size=batch_size,
+                                                    n_features=n_features,
+                                                    n_labels=n_labels)
 
     def get_batch_iterator(self):
         return iter(self.tf_dataset)
@@ -141,9 +164,12 @@ def parse_tfr_element(element, n_features=5, n_labels=14):
   return (feature, label)
 
 
-def tfrecords_reader_dataset(infile, batch_size):
+def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14):
     dataset = tf.data.TFRecordDataset(infile, compression_type='')
-    dataset = dataset.map(parse_tfr_element, num_parallel_calls=tf.data.AUTOTUNE)
+
+    parse = lambda x: parse_tfr_element(x, n_features=n_features, n_labels=n_labels)
+    dataset = dataset.map(parse, num_parallel_calls=tf.data.AUTOTUNE)
+    #dataset = dataset.map(parse_tfr_element, num_parallel_calls=tf.data.AUTOTUNE)
     dataset = dataset.map(lambda x, y: (x, y), num_parallel_calls=tf.data.AUTOTUNE)
 
     n_doms_max = 1000

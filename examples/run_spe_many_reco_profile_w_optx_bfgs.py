@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import sys, os
-sys.path.insert(0, "/home/storage/hans/jax_reco")
+sys.path.insert(0, "/home/storage/hans/jax_reco_new")
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import jax.numpy as jnp
@@ -14,11 +14,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # TriplePandelSPE/JAX stuff
-from lib.simdata_i3 import I3SimHandlerFtr
+from lib.simdata_i3 import I3SimHandler
 from lib.geo import center_track_pos_and_time_based_on_data
 from lib.network import get_network_eval_v_fn
 from dom_track_eval import get_eval_network_doms_and_track
-from likelihood_spe import get_neg_c_triple_gamma_llh
+from likelihood_spe_many_padded_input import get_neg_c_triple_gamma_llh
 
 from palettable.cubehelix import Cubehelix
 cx =Cubehelix.make(start=0.3, rotation=-0.5, n=16, reverse=False, gamma=1.0,
@@ -32,7 +32,8 @@ dzen = 0.05 # rad
 dazi = 0.05 # rad
 
 # Event Index.
-event_index = 0
+n_pulses = 5
+event_index = 4
 
 # Get network and eval logic.
 eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/network', dtype=jnp.float32)
@@ -40,7 +41,7 @@ eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dt
 
 # Get an IceCube event.
 bp = '/home/storage2/hans/i3files/21217'
-sim_handler = I3SimHandlerFtr(os.path.join(bp, 'meta_ds_21217_from_35000_to_53530.ftr'),
+sim_handler = I3SimHandler(os.path.join(bp, 'meta_ds_21217_from_35000_to_53530.ftr'),
                               os.path.join(bp, 'pulses_ds_21217_from_35000_to_53530.ftr'),
                               '/home/storage/hans/jax_reco/data/icecube/detector_geometry.csv')
 
@@ -51,6 +52,9 @@ print(f"muon energy: {meta['muon_energy_at_detector']/1.e3:.1f} TeV")
 event_data = sim_handler.get_per_dom_summary_from_sim_data(meta, pulses)
 
 print("n_doms", len(event_data))
+
+# Get dom locations, time of first give pulses and corresponding charges.
+event_data_all = sim_handler.get_per_dom_summary_extended_from_index(event_index, n_pulses=n_pulses)
 
 # Make MCTruth seed.
 track_pos = jnp.array([meta['muon_pos_x'], meta['muon_pos_y'], meta['muon_pos_z']])
@@ -66,11 +70,9 @@ print("shifted seed vertex:", centered_track_pos)
 # Create some n_photons from qtot (by rounding up).
 n_photons = np.round(event_data['charge'].to_numpy()+0.5)
 
-# Combine into single data tensor for fitting.
-fitting_event_data = jnp.array(event_data[['x', 'y', 'z', 'time']].to_numpy())
-
 # Setup likelihood
-neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
+neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track, n_pulses=n_pulses)
+print(neg_llh(track_src, centered_track_pos, centered_track_time, event_data_all))
 
 scale = 20.0
 @jax.jit
@@ -88,7 +90,7 @@ def neg_llh_5D(x, args):
         azimuth = jnp.where(azimuth < 0, azimuth+2.0*jnp.pi, azimuth)
 
         projected_dir = jnp.array([zenith, azimuth])
-        return neg_llh(projected_dir, x[2:]*scale, centered_track_time, fitting_event_data)
+        return neg_llh(projected_dir, x[2:]*scale, centered_track_time, event_data_all)
 
 solver = optx.BFGS(rtol=1e-7, atol=1e-3, use_inverse=True)
 x0 = jnp.concatenate([track_src*scale, centered_track_pos/scale])
@@ -96,11 +98,13 @@ best_x = optx.minimise(neg_llh_5D, solver, x0).value
 best_logl = neg_llh_5D(best_x, None)
 
 print("best fit done. starting scan.")
+print(best_logl)
+
 x0 = centered_track_pos/scale
 
 @jax.jit
 def neg_llh_3D(x, track_dir):
-    return neg_llh(track_dir, x*scale, centered_track_time, fitting_event_data)
+    return neg_llh(track_dir, x*scale, centered_track_time, event_data_all)
 
 def run_3D(track_dir):
     x0 = jnp.array(centered_track_pos/scale)
