@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import jax
 import jax.numpy as jnp
+import itertools
 
 try:
     import tensorflow as tf
@@ -46,6 +47,28 @@ class I3SimHandler:
         df = df_qtot.merge(self.geo.iloc[df_qtot['sensor_id']], on='sensor_id', how='outer')
         df['time'] = df_tmin['time'].values
         return df
+
+    def get_per_dom_summary_extended_from_index(self,
+                                                event_index: int,
+                                                n_pulses: int=5) -> np.ndarray:
+
+        meta, pulses = self.get_event_data(event_index)
+        pulses_sorted = pulses.sort_values(["sensor_id", "time"]).groupby("sensor_id").head(n_pulses)
+        sensors = pulses_sorted['sensor_id'].unique()
+        dom_locations = self.geo.iloc[sensors][["x", "y", "z"]].to_numpy()
+        df = pulses_sorted[['sensor_id', 'time', 'charge']].groupby('sensor_id').agg(list).reset_index()
+
+        padded_time = df['time'].apply(lambda row: self._padding(row, n_pulses)).explode().to_numpy()
+        padded_time = np.array(padded_time.reshape((len(sensors), n_pulses))).astype(float)
+
+        padded_charge = df['charge'].apply(lambda row: self._padding(row, n_pulses)).explode().to_numpy()
+        padded_charge = np.array(padded_charge.reshape((len(sensors), n_pulses))).astype(float)
+
+        return np.concatenate([dom_locations, padded_time, padded_charge], axis=1)
+
+    def _padding(self, row, n_pulses):
+        pad_vals = [0.0] * (n_pulses - len(row))
+        return [x for x in itertools.chain(row, pad_vals)]
 
 
 class I3SimBatchHandlerFtr:
@@ -135,7 +158,6 @@ def tfrecords_reader_dataset(infile, batch_size):
         )
 
     return dataset.prefetch(tf.data.AUTOTUNE)
-
 
 
 
