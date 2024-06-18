@@ -276,7 +276,7 @@ def cherenkov_cylinder_coordinates_w_rho(dom_pos, track_pos, track_dir):
     # compute rho angle, following I3PhotonicsService
 	# https://github.com/icecube/icetray/blob/e117b063b1340dc565a7459e31d8307bcf0b05b5/photonics-service/private/photonics-service/I3PhotonicsService.cxx#L152
     perp_dir = get_perpendicular_dir(track_dir)
-    cos_rho = -1.0 * jnp.dot(v_d, perp_dir) / dc
+    cos_rho = jnp.dot(v_d, perp_dir) / dc
     cos_rho = jnp.where(dc > 0.0, cos_rho, 0.0)
     rho = jnp.arccos(cos_rho)
 
