@@ -230,6 +230,65 @@ def rho_dom_relative_to_track(dom_pos, track_pos, track_dir):
 rho_dom_relative_to_track_v = jax.jit(jax.vmap(rho_dom_relative_to_track, (0, None, None), 0))
 
 
+def get_perpendicular_dir(track_dir):
+    '''
+    track_dir: 1D jax array with 3 components [dir_x, dir_y, dir_z]
+    '''
+    dirx = track_dir[0]
+    diry = track_dir[1]
+    dirz = track_dir[2]
+
+    perpz = jnp.where(jnp.logical_or(dirz == 1.0, dirz == -1.0), 0.0, jnp.sqrt(dirx**2 + diry**2))
+    perpx = -dirx * dirz/perpz
+    perpy = -diry * dirz/perpz
+    return jnp.array([perpx, perpy, perpz])
+
+
+def cherenkov_cylinder_coordinates_w_rho(dom_pos, track_pos, track_dir):
+    """
+    dom_pos: 1D jax array with 3 components [x, y, z]
+    track_pos: 1D jax array with 3 components [x, y, z]
+    track_dir: 1D jax array with 3 components [dir_x, dir_y, dir_z]
+    """
+    # vector from vertex to dom
+    v_a = dom_pos - track_pos
+
+    # distance muon travels from track vertex to point of closest approach.
+    ds = jnp.dot(v_a, track_dir)
+
+    # a vector parallel track with length ds
+    ds_v = ds * track_dir
+
+    # vector closest approach position to dom yields closest approach distance
+    v_d = v_a - ds_v
+    dc = jnp.linalg.norm(v_d)
+
+    # vector to closest approach position gives z-component
+    v_c = track_pos + ds_v
+    v_c_z = v_c[2]
+
+    # distance that the photon travel
+    dt = dc / __sin_theta_cherenkov
+
+    # distance emission point to closest approach point
+    dx = dc / __tan_theta_cherenkov
+
+    # compute rho angle, following I3PhotonicsService
+	# https://github.com/icecube/icetray/blob/e117b063b1340dc565a7459e31d8307bcf0b05b5/photonics-service/private/photonics-service/I3PhotonicsService.cxx#L152
+    perp_dir = get_perpendicular_dir(track_dir)
+    cos_rho = -1.0 * jnp.dot(v_d, perp_dir) / dc
+    cos_rho = jnp.where(dc > 0.0, cos_rho, 0.0)
+    rho = jnp.arccos(cos_rho)
+
+    rhosign = jnp.dot(jnp.cross(v_d, perp_dir), track_dir)
+    rho = jnp.where(rhosign <= 0.0, rho, 2.0*jnp.pi-rho)
+    rho = jnp.where(rho <= jnp.pi, rho, rho-2.0*jnp.pi)
+
+    return (ds - dx + dt * __n_ice_group) / __c, dc, v_c_z, rho
+
+cherenkov_cylinder_coordinates_w_rho_v = jax.jit(jax.vmap(cherenkov_cylinder_coordinates_w_rho, (0, None, None), (0, 0, 0, 0)))
+
+
 '''
 _recip__speedOfLight = 3.3356409519815204
 _n__ = 1.32548384613875
