@@ -23,14 +23,15 @@ from dom_track_eval import get_eval_network_doms_and_track
 import time
 
 dtype = jnp.float32
+#dtype = jnp.float64
 eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/network',
                                        dtype=dtype)
 eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=dtype)
 
 # Create padded batches (with different seq length).
-tfrecord = "/home/storage2/hans/i3files/21217/data_ds_n_pulses_5_21217_from_35000_to_40000_10_to_100TeV.tfrecord"
-n_pulses = 5
-batch_maker = I3SimBatchHandlerTFRecord(tfrecord, batch_size=128, n_features = 3 + 2*n_pulses)
+tfrecord = "/home/storage2/hans/i3files/21220/data_ds_n_pulses_20_21220_from_0_to_10000_10_to_100TeV.tfrecord"
+n_pulses = 20
+batch_maker = I3SimBatchHandlerTFRecord(tfrecord, batch_size=1024, n_features = 3 + 2*n_pulses)
 batch_iter = batch_maker.get_batch_iterator()
 
 # Until LLH has a noise-term, we need to remove crazy early noise pulses
@@ -107,5 +108,5 @@ for i in range(n_batches):
 
 # store results.
 results = jnp.concatenate(results)
-np.save("reco_result_tfrecord_n_pulses5.npy", results)
+np.save("reco_result_tfrecord_n_pulses20.npy", results)
 

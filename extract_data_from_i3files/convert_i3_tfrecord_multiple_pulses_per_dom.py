@@ -61,6 +61,8 @@ parser.add_argument('--recompute_true_muon_energy', action='store_true',
 
 args = parser.parse_args()
 
+n_pulses = 20
+
 dataset_id = args.DATASET_ID
 indir = args.INDIR
 infile_base = args.INFILE_BASE
@@ -265,7 +267,7 @@ sim_handler = I3SimHandler(df_meta = df_meta,
                             df_pulses = df_pulses,
                             geo_file = geo_file)
 
-write_path = os.path.join(outdir, f"data_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}_10_to_100TeV.tfrecord")
+write_path = os.path.join(outdir, f"data_ds_n_pulses_{n_pulses}_{dataset_id}_from_{file_index_start}_to_{file_index_end}_10_to_100TeV.tfrecord")
 with tf.io.TFRecordWriter(write_path, options) as writer:
 
     # Loop over events, and write to tfrecords file.
@@ -273,9 +275,7 @@ with tf.io.TFRecordWriter(write_path, options) as writer:
         meta, pulses = sim_handler.get_event_data(i)
 
     # Get dom locations, first hit times, and total charges (for each dom).
-        event_data = sim_handler.get_per_dom_summary_from_sim_data(meta, pulses)
-
-        x = event_data[['x', 'y','z','time', 'charge']].to_numpy()
+        x = sim_handler.get_per_dom_summary_extended_from_sim_data(meta, pulses, n_pulses=n_pulses)
         y = meta[['muon_energy_at_detector', 'q_tot', 'muon_zenith', 'muon_azimuth', 'muon_time',
                       'muon_pos_x', 'muon_pos_y', 'muon_pos_z', 'spline_mpe_zenith',
                       'spline_mpe_azimuth', 'spline_mpe_time', 'spline_mpe_pos_x',

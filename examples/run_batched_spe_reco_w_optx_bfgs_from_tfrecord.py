@@ -1,6 +1,6 @@
 import sys, os
 sys.path.insert(0, "/home/storage/hans/jax_reco_new")
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import jax.numpy as jnp
 from jax.scipy import optimize
@@ -28,7 +28,7 @@ eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/n
 eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=dtype)
 
 # Create padded batches (with different seq length).
-tfrecord = "/home/storage2/hans/i3files/21217/data_ds_21217_from_10000_to_20000_10_to_100TeV.tfrecord"
+tfrecord = "/home/storage2/hans/i3files/21220/data_ds_21220_from_0_to_10000_10_to_100TeV.tfrecord"
 batch_maker = I3SimBatchHandlerTFRecord(tfrecord, batch_size=4096)
 batch_iter = batch_maker.get_batch_iterator()
 
