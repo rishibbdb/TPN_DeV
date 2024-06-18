@@ -21,7 +21,6 @@ def get_network_eval_fn(bpath: str = '../../data/network/', n_layer=9, dtype=jnp
 
     params = tuple(params)
 
-    @jax.jit
     def eval_network(x):
         """
         """
@@ -94,7 +93,6 @@ class TriplePandleNet:
         return tuple(params)
 
 
-@jax.jit
 def _eval_network(x: jaxlib.xla_extension.ArrayImpl,
         params: Tuple[Tuple[jaxlib.xla_extension.ArrayImpl]]) \
                 -> jaxlib.xla_extension.ArrayImpl:

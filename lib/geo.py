@@ -36,7 +36,7 @@ def center_track_pos_and_time_based_on_data_batched(data, mctruth):
 
 center_track_pos_and_time_based_on_data_batched_v = jax.jit(jax.vmap(center_track_pos_and_time_based_on_data_batched, (0, 0), (0, 0)))
 
-@jax.jit
+
 def geo_time(dom_pos, track_pos, track_dir):
     """
     roughly following https://github.com/icecube/icetray/blob/dde656a29dbd8330e5f54f9260550952f0269bc9/phys-services/private/phys-services/I3Calculator.cxx#L19
@@ -69,7 +69,6 @@ def geo_time(dom_pos, track_pos, track_dir):
 geo_time_v = jax.jit(jax.vmap(geo_time, (0, None, None), 0))
 
 
-@jax.jit
 def cherenkov_cylinder_coordinates(dom_pos, track_pos, track_dir):
     """
     dom_pos: 1D jax array with 3 components [x, y, z]
@@ -106,7 +105,6 @@ def cherenkov_cylinder_coordinates(dom_pos, track_pos, track_dir):
 cherenkov_cylinder_coordinates_v = jax.jit(jax.vmap(cherenkov_cylinder_coordinates, (0, None, None), (0, 0, 0)))
 
 
-@jax.jit
 def closest_distance_dom_track(dom_pos, track_pos, track_dir):
     """
     dom_pos: 1D jax array with 3 components [x, y, z]
@@ -126,7 +124,6 @@ def closest_distance_dom_track(dom_pos, track_pos, track_dir):
 closest_distance_dom_track_v = jax.jit(jax.vmap(closest_distance_dom_track, (0, None, None), 0))
 
 
-@jax.jit
 def convert_spherical_to_cartesian_direction(x):
     """
     x = (theta, phi)
@@ -144,7 +141,6 @@ def convert_spherical_to_cartesian_direction(x):
 convert_spherical_to_cartesian_direction_v = jax.jit(jax.vmap(closest_distance_dom_track, 0, 0))
 
 
-@jax.jit
 def get_xyz_from_zenith_azimuth(x):
     track_dir = convert_spherical_to_cartesian_direction(x)
     y = -1 * track_dir
@@ -153,7 +149,6 @@ def get_xyz_from_zenith_azimuth(x):
 get_xyz_from_zenith_azimuth_v = jax.jit(jax.vmap(get_xyz_from_zenith_azimuth, 0, 0))
 
 
-@jax.jit
 def light_travel_time_i3calculator(dom_pos, track_pos, track_dir):
     """
     roughly following https://github.com/icecube/icetray/blob/dde656a29dbd8330e5f54f9260550952f0269bc9/phys-services/private/phys-services/I3Calculator.cxx#L19
@@ -181,7 +176,6 @@ def light_travel_time_i3calculator(dom_pos, track_pos, track_dir):
 light_travel_time_i3calculator_v = jax.jit(jax.vmap(light_travel_time_i3calculator, (0, None, None), 0))
 
 
-@jax.jit
 def closest_point_on_track(dom_pos, track_pos, track_dir):
     """
     dom_pos: 1D jax array with 3 components [x, y, z]
@@ -198,7 +192,6 @@ def closest_point_on_track(dom_pos, track_pos, track_dir):
 closest_point_on_track_v = jax.jit(jax.vmap(closest_point_on_track, (0, None, None), 0))
 
 
-@jax.jit
 def z_component_closest_point_on_track(dom_pos, track_pos, track_dir):
     """
     dom_pos: 1D jax array with 3 components [x, y, z]
@@ -215,7 +208,6 @@ def z_component_closest_point_on_track(dom_pos, track_pos, track_dir):
 z_component_closest_point_on_track_v = jax.jit(jax.vmap(z_component_closest_point_on_track, (0, None, None), 0))
 
 
-@jax.jit
 def rho_dom_relative_to_track(dom_pos, track_pos, track_dir):
     """
     clean up and verify!

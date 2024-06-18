@@ -1,7 +1,6 @@
 import jax
 import jax.numpy as jnp
 
-@jax.jit
 def transform_network_inputs(x):
 	# 0: dist, 1: rho, 2: z, 3: zenith, 4: azimuth
     # in units of m and radians
@@ -24,7 +23,7 @@ def transform_network_inputs(x):
 
 transform_network_inputs_v = jax.jit(jax.vmap(transform_network_inputs, 0, 0))
 
-@jax.jit
+
 def transform_network_outputs(x):
     a = 1+20*jax.nn.sigmoid(x[3:6]) + 1.e-30
     b = 2.0*jax.nn.sigmoid(x[6:9])
@@ -36,7 +35,7 @@ transform_network_outputs_v = jax.jit(jax.vmap(transform_network_outputs, 0, 0))
 """
 use transform_network_inputs and _outputs instead.
 
-@jax.jit
+
 def transform_dimensions(dist, rho, z, zenith, azimuth, km_scale = 1000):
     # deprecated
     x0 = dist / km_scale
@@ -49,7 +48,7 @@ def transform_dimensions(dist, rho, z, zenith, azimuth, km_scale = 1000):
     y = jnp.sin(jnp.deg2rad(zenith)) * jnp.sin(jnp.deg2rad(azimuth))
     return jnp.array([x0, x1, x2, x3, z, x, y])
 
-@jax.jit
+
 def transform_dimensions_vec(x, km_scale=1000):
     # deprecated
     # 0: dist, 1: rho, 2: z, 3: zenith, 4: azimuth
