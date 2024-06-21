@@ -221,7 +221,7 @@ def rho_dom_relative_to_track(dom_pos, track_pos, track_dir):
     v2 = dom_pos - closestapproach
     zdir = jnp.cross(track_dir, jnp.cross(jnp.array([0,0,1]), track_dir))
     positivedir = jnp.cross(track_dir, zdir)
-    ypart = v2-v2*jnp.dot(zdir, v2)
+    ypart = v2-zdir*jnp.dot(zdir, v2)
     zpart = v2-ypart
     z = jnp.dot(zpart, zdir)
     y = jnp.dot(ypart, positivedir)
