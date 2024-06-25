@@ -2,6 +2,9 @@ import jax.numpy as jnp
 import jax
 import numpy as np
 
+from jax.scipy.special import gammaincc, erf
+from jax.scipy.integrate import trapezoid
+
 def c_multi_gamma_prob(x, mix_probs, a, b, sigma=3.0, delta=10.0):
     # todo: consider exploring logsumexp trick (potentially more stable)
     # e.g. https://github.com/tensorflow/probability/blob/65f265c62bb1e2d15ef3e25104afb245a6d52429/tensorflow_probability/python/distributions/mixture_same_family.py#L348
@@ -136,3 +139,42 @@ def _c_gamma_region4(x, a, b, sigma=3):
     cpandel= jnp.power(rhosigma, a)/sigma * jnp.exp(-0.5*delay2/sigma2+0.25*eta2) / (M_SQRT2*M_SQRTPI)
 
     return  cpandel * u * jnp.exp(-k*ksi21) * psi / jnp.sqrt(sqrt1plusz2)
+
+
+def c_gamma_sf(x, a, b, sigma=3.0):
+    """
+    following arXiv:astro-ph/0506136
+    """
+    alpha = 2.5 # controls the split of the integral => precision.
+    n_steps = 10 # controls the support points in trapezoidal integration
+
+    sqrt2sigma2 = jnp.sqrt(2.0*sigma**2)
+
+    ymin = x - alpha*sqrt2sigma2 # start of numeric integration
+    ymin = jnp.where(ymin >= 0.0, ymin, 0.0)
+
+    ymax = x + alpha*sqrt2sigma2 # end of numeric integration
+    ymax = jnp.where(ymax >= 0.0, ymax, 0.0)
+    # todo: think about special case when ymin = ymax = 0.0
+    # based on testing so far: no need to do anything.
+
+    term1 = gammaincc(a, b*ymax) + gammaincc(a, b*ymin)
+    term2 = jnp.power(b, a) # J in arXiv:astro-ph/0506136
+
+    x_int = jnp.linspace(ymin, ymax, n_steps, axis=-1)
+
+    # add dimension to end for proper broadcasting during integration
+    a_e = jnp.expand_dims(a, axis=-1)
+    b_e = jnp.expand_dims(b, axis=-1)
+    y_int = jnp.power(x_int, a_e-1) * jnp.exp(-b_e*x_int) * erf((x-x_int)/sqrt2sigma2)
+    term2 *= trapezoid(y_int, x=x_int, axis=-1)
+
+    sf = 0.5 * (term1 - term2/jax.scipy.special.gamma(a))
+    return jnp.clip(sf, min=0.0, max=1.0)
+
+
+def c_multi_gamma_sf(x, mix_probs, a, b, sigma=3.0):
+    probs = c_gamma_sf(x, a, b, sigma=sigma)
+    return jnp.sum(mix_probs * probs, axis=-1)
+
+c_multi_gamma_sf_v = jax.jit(jax.vmap(c_multi_gamma_sf, (0, 0, 0, 0, None), 0))
