@@ -165,7 +165,12 @@ def parse_tfr_element(element, n_features=5, n_labels=14):
 
 
 def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14):
-    dataset = tf.data.TFRecordDataset(infile, compression_type='')
+    if '*' in infile:
+        dataset = tf.data.Dataset.list_files(infile, shuffle=False)
+        dataset = tf.data.TFRecordDataset(dataset, compression_type='')
+
+    else:
+        dataset = tf.data.TFRecordDataset(infile, compression_type='')
 
     parse = lambda x: parse_tfr_element(x, n_features=n_features, n_labels=n_labels)
     dataset = dataset.map(parse, num_parallel_calls=tf.data.AUTOTUNE)

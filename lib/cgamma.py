@@ -3,7 +3,6 @@ import jax
 import numpy as np
 
 from jax.scipy.special import gammaincc, erf
-from jax.scipy.integrate import trapezoid
 
 def c_multi_gamma_prob(x, mix_probs, a, b, sigma=3.0, delta=10.0):
     # todo: consider exploring logsumexp trick (potentially more stable)
@@ -146,7 +145,8 @@ def c_gamma_sf(x, a, b, sigma=3.0):
     following arXiv:astro-ph/0506136
     """
     alpha = 2.5 # controls the split of the integral => precision.
-    n_steps = 10 # controls the support points in trapezoidal integration
+    n_steps = 20 # controls the support points in trapezoidal integration
+    eps = 1.e-6
 
     sqrt2sigma2 = jnp.sqrt(2.0*sigma**2)
 
@@ -161,16 +161,20 @@ def c_gamma_sf(x, a, b, sigma=3.0):
     term1 = gammaincc(a, b*ymax) + gammaincc(a, b*ymin)
     term2 = jnp.power(b, a) # J in arXiv:astro-ph/0506136
 
-    x_int = jnp.linspace(ymin, ymax, n_steps, axis=-1)
+    x_int = jnp.linspace(ymin, ymax, n_steps+1, axis=-1)
+    x_int = 0.5*(x_int[...,1:] + x_int[...,:-1])
+    dx = jnp.expand_dims(x_int[..., 1] - x_int[..., 0], axis=-1)
 
     # add dimension to end for proper broadcasting during integration
+    # and then integrate by brute force on even grid
+    # todo: come up with something faster and more accurate?
     a_e = jnp.expand_dims(a, axis=-1)
     b_e = jnp.expand_dims(b, axis=-1)
     y_int = jnp.power(x_int, a_e-1) * jnp.exp(-b_e*x_int) * erf((x-x_int)/sqrt2sigma2)
-    term2 *= trapezoid(y_int, x=x_int, axis=-1)
+    term2 *= jnp.sum(y_int * dx, axis=-1)
 
     sf = 0.5 * (term1 - term2/jax.scipy.special.gamma(a))
-    return jnp.clip(sf, min=0.0, max=1.0)
+    return jnp.clip(sf, min=eps, max=1.0)
 
 
 def c_multi_gamma_sf(x, mix_probs, a, b, sigma=3.0):
