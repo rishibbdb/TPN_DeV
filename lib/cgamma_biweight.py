@@ -12,7 +12,7 @@ def c_multi_gamma_biweight_prob(x, mix_probs, a, b, sigma=3.0):
 
 c_multi_gamma_biweight_prob_v = jax.vmap(c_multi_gamma_biweight_prob, (0, 0, 0, 0, None), 0)
 
-
+'''
 def c_gamma_biweight_prob(x, a, b, sigma=3.0):
     s = 3.0 * sigma
 
@@ -66,6 +66,91 @@ def c_gamma_biweight_prob(x, a, b, sigma=3.0):
 
     pre_fac = 15.0/(16*b**4*s**5*g_a)
     return pre_fac * tsum
+'''
+
+def branch0(x, a, b, s):
+    # branch 0 (-s < x < +s)
+    g_a = gamma(a)
+    g_1pa = gamma(1+a)
+    g_2pa = gamma(2+a)
+    g_3pa = gamma(3+a)
+    g_4pa = gamma(4+a)
+
+    bspx = b*(s+x)
+
+    gincc_a = gammaincc(a, bspx) * g_a
+    gincc_1pa = gammaincc(1+a, bspx)*g_1pa
+    gincc_2pa = gammaincc(2+a, bspx)*g_2pa
+    gincc_3pa = gammaincc(3+a, bspx)*g_3pa
+    gincc_4pa = gammaincc(4+a, bspx)*g_4pa
+
+    fbx = 4*b*x
+    t0 = b**4 * (s**4 - 2*s**2*x**2 + x**4)
+    t1 = 4*b**3 * (s**2*x - x**3)
+    t2 = b**2 * (6*x**2 - 2*s**2)
+
+    tsum0 = (
+                (g_a - gincc_a) * t0
+                + (g_1pa - gincc_1pa) * t1
+                + (g_2pa - gincc_2pa) * t2
+                + g_4pa - gincc_4pa
+                + gincc_3pa * fbx
+                - g_2pa * (2*fbx + a*fbx)
+    )
+
+    pre_fac = 15.0/(16*b**4*s**5*g_a)
+    return pre_fac * tsum0
+
+
+def branch1(x, a, b, s):
+    # branch 1 (s > x)
+
+    g_a = gamma(a)
+    g_1pa = gamma(1+a)
+    g_2pa = gamma(2+a)
+    g_3pa = gamma(3+a)
+    g_4pa = gamma(4+a)
+
+    bspx = b*(s+x)
+    bxms = b*(x-s)
+
+    gincc_a = gammaincc(a, bspx) * g_a
+    gincc_1pa = gammaincc(1+a, bspx)*g_1pa
+    gincc_2pa = gammaincc(2+a, bspx)*g_2pa
+    gincc_3pa = gammaincc(3+a, bspx)*g_3pa
+    gincc_4pa = gammaincc(4+a, bspx)*g_4pa
+
+    gincc_a_m = gammaincc(a, bxms) * g_a
+    gincc_1pa_m = gammaincc(1+a, bxms)*g_1pa
+    gincc_2pa_m = gammaincc(2+a, bxms)*g_2pa
+    gincc_3pa_m = gammaincc(3+a, bxms)*g_3pa
+    gincc_4pa_m = gammaincc(4+a, bxms)*g_4pa
+
+    fbx = 4*b*x
+    t0 = b**4 * (s**4 - 2*s**2*x**2 + x**4)
+    t1 = 4*b**3 * (s**2*x - x**3)
+    t2 = b**2 * (6*x**2 - 2*s**2)
+
+    tsum1 = (
+                (gincc_a_m - gincc_a) * t0
+                + (gincc_1pa_m - gincc_1pa) * t1
+                + (gincc_2pa_m - gincc_2pa) * t2
+                + (gincc_3pa - gincc_3pa_m) * fbx
+                + gincc_4pa_m - gincc_4pa
+    )
+
+    pre_fac = 15.0/(16*b**4*s**5*g_a)
+    return pre_fac * tsum1
+
+
+def c_gamma_biweight_prob(x, a, b, sigma=3.0):
+    s = 3.0 * sigma
+    x0 = jnp.where(x < s, x, s)
+    b0 = branch0(x0, a, b, s)
+
+    x1 = jnp.where(x < s, s, x)
+    b1 = branch1(x1, a, b, s)
+    return jnp.where(x < s, b0, b1)
 
 c_gamma_biweight_prob_v = jax.vmap(c_gamma_biweight_prob, (0, 0, 0, None), 0)
 
@@ -102,9 +187,9 @@ def c_gamma_biweight_cdf(x, a, b, sigma=3.0):
              + 5*a**3*(-21 + 2*b*(9*x + b*(s**2 - 3*x**2)))
              - 15*a**2*(10 + b*(-11*x + 2*b*(x**2*(3 - bx) + s**2*(-1 + bx))))
              + a*(
-					-72 - 5*b*(3*b**3*s**4 - 18*x + 3*x*bx*(4 + bx*(-2 + bx))
+                    -72 - 5*b*(3*b**3*s**4 - 18*x + 3*x*bx*(4 + bx*(-2 + bx))
                     + b*s**2*(-4 - 6*bx*(-1 + bx)))
-			 )
+             )
     )
 
     c2 = (s+x) * c__21 * (g_a - g_a_bspx)

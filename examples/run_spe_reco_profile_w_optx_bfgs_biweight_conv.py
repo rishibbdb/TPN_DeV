@@ -33,7 +33,7 @@ dzen = 0.05 # rad
 dazi = 0.05 # rad
 
 # Event Index.
-event_index = 0
+event_index = 2
 
 # Get network and eval logic.
 eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/network', dtype=jnp.float32)
@@ -101,7 +101,7 @@ def neg_llh_5D(x, args):
 
 solver = optx.BFGS(rtol=1e-7, atol=1e-3, use_inverse=True)
 x0 = jnp.concatenate([track_src*scale, centered_track_pos/scale])
-best_x = optx.minimise(neg_llh_5D, solver, x0).value
+best_x = optx.minimise(neg_llh_5D, solver, x0, throw=False).value
 best_logl = neg_llh_5D(best_x, None)
 
 print("best fit done. starting scan.")
@@ -114,7 +114,7 @@ def neg_llh_3D(x, track_dir):
 
 def run_3D(track_dir):
     x0 = jnp.array(centered_track_pos/scale)
-    values = optx.minimise(neg_llh_3D, solver, x0, args=track_dir).value
+    values = optx.minimise(neg_llh_3D, solver, x0, args=track_dir, throw=False).value
     return neg_llh_3D(values, track_dir)
 
 run_3D_v = jax.jit(jax.vmap(run_3D, 0, 0))
@@ -129,8 +129,9 @@ logls = logls.reshape(X.shape)
 
 
 fig, ax = plt.subplots()
-min_logl = np.amin(logls)
-delta_logl = logls - np.amin(logls)
+delta_logl = logls - np.nanmin(logls)
+print(logls)
+delta_logl = np.where(np.isnan(logls), 1000, delta_logl)
 pc = ax.pcolormesh(np.rad2deg(X), np.rad2deg(Y), delta_logl, vmin=0, vmax=np.min([25, 1.2*np.amax(delta_logl)]), shading='auto', cmap=cx)
 cbar = fig.colorbar(pc)
 cbar.ax.tick_params(labelsize=16)

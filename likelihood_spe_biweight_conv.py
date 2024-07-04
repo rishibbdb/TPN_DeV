@@ -16,7 +16,7 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
 
         # Constant parameters.
         sigma = 3.0 # width of gaussian convolution
-        X_safe = 9.0 # when to stop evaluating negative time residuals in units of sigma
+        X_safe = 2.9 # when to stop evaluating negative time residuals in units of sigma
 
         dom_pos = event_data[:, :3]
         first_hit_times = event_data[:, 3]
