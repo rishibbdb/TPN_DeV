@@ -83,8 +83,8 @@ meta_keys['spline_mpe'] = 'SplineMPEIC'
 meta_keys['mc_muon_energy_at_interaction'] = 'TrueMuonEnergyAtInteraction'
 meta_keys['mc_muon_energy_at_detector_entry']  = 'TrueMuoneEnergyAtDetectorEntry'
 meta_keys['mc_muon_energy_at_detector_leave'] = 'TrueMuoneEnergyAtDetectorLeave'
-min_muon_energy_at_detector = 1000 # GeV
-max_muon_energy_at_detector = 100000 # GeV
+min_muon_energy_at_detector = 100 # GeV
+max_muon_energy_at_detector = 1000000 # GeV
 
 # in old datsets, the background I3MCTree is kept separately
 # from the I3MCTree. Hence checking for coincident events depends
@@ -265,7 +265,7 @@ sim_handler = I3SimHandler(df_meta = df_meta,
                             df_pulses = df_pulses,
                             geo_file = geo_file)
 
-write_path = os.path.join(outdir, f"data_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}_10_to_100TeV.tfrecord")
+write_path = os.path.join(outdir, f"data_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}_1st_pulse.tfrecord")
 with tf.io.TFRecordWriter(write_path, options) as writer:
 
     # Loop over events, and write to tfrecords file.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import sys, os
-sys.path.insert(0, "/home/storage/hans/jax_reco")
+sys.path.insert(0, "/home/storage/hans/jax_reco_new/")
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import jax.numpy as jnp
@@ -14,7 +14,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # TriplePandelSPE/JAX stuff
-from lib.simdata_i3 import I3SimHandlerFtr
+from lib.simdata_i3 import I3SimHandler
 from lib.geo import center_track_pos_and_time_based_on_data
 from lib.network import get_network_eval_v_fn
 from dom_track_eval import get_eval_network_doms_and_track
@@ -32,15 +32,15 @@ dzen = 0.05 # rad
 dazi = 0.05 # rad
 
 # Event Index.
-event_index = 1
+event_index = 2
 
 # Get network and eval logic.
-eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/network')
-eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v)
+eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/network', dtype=jnp.float32)
+eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=jnp.float32)
 
 # Get an IceCube event.
 bp = '/home/storage2/hans/i3files/21217'
-sim_handler = I3SimHandlerFtr(os.path.join(bp, 'meta_ds_21217_from_35000_to_53530.ftr'),
+sim_handler = I3SimHandler(os.path.join(bp, 'meta_ds_21217_from_35000_to_53530.ftr'),
                               os.path.join(bp, 'pulses_ds_21217_from_35000_to_53530.ftr'),
                               '/home/storage/hans/jax_reco/data/icecube/detector_geometry.csv')
 
@@ -71,6 +71,7 @@ fitting_event_data = jnp.array(event_data[['x', 'y', 'z', 'time']].to_numpy())
 
 # Setup likelihood
 neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
+print(neg_llh(track_src, centered_track_pos, centered_track_time, fitting_event_data))
 
 scale = 20.0
 @jax.jit
@@ -96,6 +97,7 @@ best_x = optx.minimise(neg_llh_5D, solver, x0).value
 best_logl = neg_llh_5D(best_x, None)
 
 print("best fit done. starting scan.")
+print(best_logl)
 x0 = centered_track_pos/scale
 
 @jax.jit

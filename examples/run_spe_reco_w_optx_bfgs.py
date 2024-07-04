@@ -63,6 +63,7 @@ fitting_event_data = jnp.array(event_data[['x', 'y', 'z', 'time']].to_numpy())
 
 # Setup likelihood
 neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
+print(neg_llh(track_src, centered_track_pos, centered_track_time, fitting_event_data))
 
 scale = 20.0
 @jax.jit

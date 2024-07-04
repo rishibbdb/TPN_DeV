@@ -3,7 +3,7 @@
 from iminuit import Minuit
 import sys, os
 sys.path.insert(0, "/home/storage/hans/jax_reco")
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import jax.numpy as jnp
 import jax
@@ -33,7 +33,7 @@ dzen = 0.03 # rad
 dazi = 0.03 # rad
 
 # Event Index.
-event_index = 1
+event_index = 5
 
 # Get network and eval logic.
 eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/network')

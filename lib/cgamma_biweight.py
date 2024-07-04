@@ -19,19 +19,23 @@ def c_gamma_biweight_prob(x, a, b, sigma=3.0):
     g_a = gamma(a)
     g_1pa = gamma(1+a)
     g_2pa = gamma(2+a)
+    g_3pa = gamma(3+a)
     g_4pa = gamma(4+a)
 
-    gincc_a = gammaincc(a, b*(s+x)) * g_a
-    gincc_1pa = gammaincc(1+a, b*(s+x))*gamma(1+a)
-    gincc_2pa = gammaincc(2+a, b*(s+x))*gamma(2+a)
-    gincc_3pa = gammaincc(3+a, b*(s+x))*gamma(3+a)
-    gincc_4pa = gammaincc(4+a, b*(s+x))*gamma(4+a)
+    bspx = b*(s+x)
+    bxms = b*(x-s)
 
-    gincc_a_m = gammaincc(a, b*(x-s)) * g_a
-    gincc_1pa_m = gammaincc(1+a, b*(x-s))*gamma(1+a)
-    gincc_2pa_m = gammaincc(2+a, b*(x-s))*gamma(2+a)
-    gincc_3pa_m = gammaincc(3+a, b*(x-s))*gamma(3+a)
-    gincc_4pa_m = gammaincc(4+a, b*(x-s))*gamma(4+a)
+    gincc_a = gammaincc(a, bspx) * g_a
+    gincc_1pa = gammaincc(1+a, bspx)*g_1pa
+    gincc_2pa = gammaincc(2+a, bspx)*g_2pa
+    gincc_3pa = gammaincc(3+a, bspx)*g_3pa
+    gincc_4pa = gammaincc(4+a, bspx)*g_4pa
+
+    gincc_a_m = gammaincc(a, bxms) * g_a
+    gincc_1pa_m = gammaincc(1+a, bxms)*g_1pa
+    gincc_2pa_m = gammaincc(2+a, bxms)*g_2pa
+    gincc_3pa_m = gammaincc(3+a, bxms)*g_3pa
+    gincc_4pa_m = gammaincc(4+a, bxms)*g_4pa
 
     fbx = 4*b*x
     t0 = b**4 * (s**4 - 2*s**2*x**2 + x**4)
