@@ -10,11 +10,11 @@ def c_multi_gamma_biweight_prob(x, mix_probs, a, b, sigma=3.0):
     # for now: implement naive mixture probs
     return jnp.sum(mix_probs * c_gamma_biweight_prob(x, a, b, sigma), axis=-1)
 
-c_multi_gamma_prob_v = jax.vmap(c_multi_gamma_biweight_prob, (0, 0, 0, 0, None), 0)
+c_multi_gamma_biweight_prob_v = jax.vmap(c_multi_gamma_biweight_prob, (0, 0, 0, 0, None), 0)
 
 
 def c_gamma_biweight_prob(x, a, b, sigma=3.0):
-    s = 2.5 * sigma
+    s = 3.0 * sigma
 
     g_a = gamma(a)
     g_1pa = gamma(1+a)
