@@ -15,7 +15,7 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
                                event_data):
 
         # Constant parameters.
-        sigma = 3.6 # width of gaussian convolution
+        sigma = 3.0 # width of gaussian convolution
         X_safe = 9.0 # when to stop evaluating negative time residuals in units of sigma
 
         dom_pos = event_data[:, :3]
@@ -37,3 +37,17 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
                                                                     sigma)))
 
     return neg_c_triple_gamma_llh
+
+
+def get_llh_for_iminuit_migrad(eval_network_doms_and_track):
+    """
+    """
+    neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
+
+    @jax.jit
+    def neg_llh_5D(x, track_time, data):
+        track_direction = x[:2]
+        track_vertex = x[2:]
+        return neg_llh(track_direction, track_vertex, track_time, data)
+
+    return neg_llh_5D
