@@ -41,9 +41,13 @@ eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dt
 
 # Get an IceCube event.
 bp = '/home/storage2/hans/i3files/21217'
-sim_handler = I3SimHandler(os.path.join(bp, 'meta_ds_21217_from_35000_to_53530.ftr'),
-                              os.path.join(bp, 'pulses_ds_21217_from_35000_to_53530.ftr'),
+sim_handler = I3SimHandler(os.path.join(bp, 'meta_ds_21217_from_10000_to_20000_1_to_10TeV.ftr'),
+                              os.path.join(bp, 'pulses_ds_21217_from_10000_to_20000_1_to_10TeV.ftr'),
                               '/home/storage/hans/jax_reco_new/data/icecube/detector_geometry.csv')
+
+#sim_handler = I3SimHandler(os.path.join(bp, 'meta_ds_21217_from_35000_to_53530.ftr'),
+#                              os.path.join(bp, 'pulses_ds_21217_from_35000_to_53530.ftr'),
+#                              '/home/storage/hans/jax_reco_new/data/icecube/detector_geometry.csv')
 
 meta, pulses = sim_handler.get_event_data(event_index)
 print(f"muon energy: {meta['muon_energy_at_detector']/1.e3:.1f} TeV")
