@@ -19,7 +19,7 @@ from lib.network import get_network_eval_v_fn
 
 from likelihood_spe_padded_input import get_neg_c_triple_gamma_llh
 from lib.geo import get_xyz_from_zenith_azimuth, __c
-from dom_track_eval import get_eval_network_doms_and_track_altrho as get_eval_network_doms_and_track
+from dom_track_eval import get_eval_network_doms_and_track2 as get_eval_network_doms_and_track
 import time
 
 dtype = jnp.float32
@@ -28,8 +28,8 @@ eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/n
 eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=dtype)
 
 # Create padded batches (with different seq length).
-tfrecord = "/home/storage2/hans/i3files/21220/ftr/data_ds_21220_from_*_to_*_1st_pulse.tfrecord"
-#tfrecord = "/home/storage2/hans/i3files/21217/ftr/data_ds_21217_from_*_to_*_1st_pulse.tfrecord"
+#tfrecord = "/home/storage2/hans/i3files/21220/ftr/data_ds_21220_from_*_to_*_1st_pulse.tfrecord"
+tfrecord = "/home/storage2/hans/i3files/21217/ftr/data_ds_21217_from_*_to_*_1st_pulse.tfrecord"
 batch_maker = I3SimBatchHandlerTFRecord(tfrecord, batch_size=8192)
 batch_iter = batch_maker.get_batch_iterator()
 
@@ -107,6 +107,6 @@ for i in range(n_batches):
 
 # store results.
 results = jnp.concatenate(results)
-np.save("reco_result_21220_tfrecord_altrho_1st_pulse_tsigma_2.0.npy", results)
-#np.save("reco_result_21217_tfrecord_altrho_1st_pulse_tsigma_2.0.npy", results)
+#np.save("reco_result_21220_tfrecord_altrho2_1st_pulse_tsigma_2.0.npy", results)
+np.save("reco_result_21217_tfrecord_altrho2_1st_pulse_tsigma_2.0.npy", results)
 

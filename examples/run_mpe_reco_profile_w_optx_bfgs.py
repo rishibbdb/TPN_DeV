@@ -18,12 +18,14 @@ from lib.simdata_i3 import I3SimHandler
 from lib.geo import center_track_pos_and_time_based_on_data
 from lib.network import get_network_eval_v_fn
 from lib.experimental_methods import remove_early_pulses
-from dom_track_eval import get_eval_network_doms_and_track_altrho as get_eval_network_doms_and_track
+from dom_track_eval import get_eval_network_doms_and_track2 as get_eval_network_doms_and_track
 from likelihood_mpe import get_neg_c_triple_gamma_llh
 
 from palettable.cubehelix import Cubehelix
 cx =Cubehelix.make(start=0.3, rotation=-0.5, n=16, reverse=False, gamma=1.0,
                            max_light=1.0,max_sat=0.5, min_sat=1.4).get_mpl_colormap()
+
+import time
 
 # Number of scan points on 1D
 n_eval = 50 # making it a 20x20 grid
@@ -41,13 +43,14 @@ eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dt
 
 # Get an IceCube event.
 bp = '/home/storage2/hans/i3files/21217'
-sim_handler = I3SimHandler(os.path.join(bp, 'meta_ds_21217_from_10000_to_20000_1_to_10TeV.ftr'),
-                              os.path.join(bp, 'pulses_ds_21217_from_10000_to_20000_1_to_10TeV.ftr'),
-                              '/home/storage/hans/jax_reco_new/data/icecube/detector_geometry.csv')
 
-#sim_handler = I3SimHandler(os.path.join(bp, 'meta_ds_21217_from_35000_to_53530.ftr'),
-#                              os.path.join(bp, 'pulses_ds_21217_from_35000_to_53530.ftr'),
+#sim_handler = I3SimHandler(os.path.join(bp, 'meta_ds_21217_from_10000_to_20000_1_to_10TeV.ftr'),
+#                              os.path.join(bp, 'pulses_ds_21217_from_10000_to_20000_1_to_10TeV.ftr'),
 #                              '/home/storage/hans/jax_reco_new/data/icecube/detector_geometry.csv')
+
+sim_handler = I3SimHandler(os.path.join(bp, 'meta_ds_21217_from_35000_to_53530.ftr'),
+                              os.path.join(bp, 'pulses_ds_21217_from_35000_to_53530.ftr'),
+                              '/home/storage/hans/jax_reco_new/data/icecube/detector_geometry.csv')
 
 meta, pulses = sim_handler.get_event_data(event_index)
 print(f"muon energy: {meta['muon_energy_at_detector']/1.e3:.1f} TeV")
@@ -109,7 +112,8 @@ best_logl = neg_llh_5D(best_x, None)
 
 print("best fit done. starting scan.")
 print(best_logl)
-x0 = centered_track_pos/scale
+#x0 = centered_track_pos/scale
+#x0 = best_x[2:]
 
 @jax.jit
 def neg_llh_3D(x, track_dir):
@@ -117,7 +121,7 @@ def neg_llh_3D(x, track_dir):
 
 def run_3D(track_dir):
     x0 = jnp.array(centered_track_pos/scale)
-    values = optx.minimise(neg_llh_3D, solver, x0, args=track_dir).value
+    values = optx.minimise(neg_llh_3D, solver, x0, args=track_dir, throw=False).value
     return neg_llh_3D(values, track_dir)
 
 run_3D_v = jax.jit(jax.vmap(run_3D, 0, 0))
@@ -127,9 +131,12 @@ azimuth = jnp.linspace(track_src[1]-dzen, track_src[1]+dazi, n_eval)
 X, Y = jnp.meshgrid(zenith, azimuth)
 init_dirs = jnp.column_stack([X.flatten(), Y.flatten()])
 
+tic = time.time()
 logls = run_3D_v(init_dirs)
-logls = logls.reshape(X.shape)
+toc = time.time()
+print(f"jit + reco of grid took {toc-tic:.1f}s.")
 
+logls = logls.reshape(X.shape)
 
 fig, ax = plt.subplots()
 min_logl = np.amin(logls)

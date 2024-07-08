@@ -2,7 +2,7 @@
 
 from iminuit import Minuit
 import sys, os
-sys.path.insert(0, "/home/storage/hans/jax_reco")
+sys.path.insert(0, "/home/storage/hans/jax_reco_new")
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import jax.numpy as jnp
@@ -15,10 +15,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # TriplePandelSPE/JAX stuff
-from lib.simdata_i3 import I3SimHandlerFtr
+from lib.simdata_i3 import I3SimHandler
 from lib.geo import center_track_pos_and_time_based_on_data
 from lib.network import get_network_eval_v_fn
-from dom_track_eval import get_eval_network_doms_and_track
+from dom_track_eval import get_eval_network_doms_and_track2 as get_eval_network_doms_and_track
+#from dom_track_eval import get_eval_network_doms_and_track
 from likelihood_spe import get_neg_c_triple_gamma_llh
 
 from palettable.cubehelix import Cubehelix
@@ -41,7 +42,7 @@ eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v)
 
 # Get an IceCube event.
 bp = '/home/storage2/hans/i3files/21217'
-sim_handler = I3SimHandlerFtr(os.path.join(bp, 'meta_ds_21217_from_35000_to_53530.ftr'),
+sim_handler = I3SimHandler(os.path.join(bp, 'meta_ds_21217_from_35000_to_53530.ftr'),
                               os.path.join(bp, 'pulses_ds_21217_from_35000_to_53530.ftr'),
                               '/home/storage/hans/jax_reco/data/icecube/detector_geometry.csv')
 
@@ -73,10 +74,6 @@ fitting_event_data = jnp.array(event_data[['x', 'y', 'z', 'time']].to_numpy())
 # Setup likelihood
 neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
 neg_llh_v = jax.jit(jax.vmap(neg_llh, (0, None, None, None), 0))
-
-#@jax.jit
-#def neg_llh_5D(x, track_time, data):
-#    return neg_llh(x[:2], x[2:], track_time, data)
 
 zenith = jnp.linspace(track_src[0]-dzen, track_src[0]+dazi, n_eval)
 azimuth = jnp.linspace(track_src[1]-dzen, track_src[1]+dazi, n_eval)

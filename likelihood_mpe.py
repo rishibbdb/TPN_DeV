@@ -17,7 +17,7 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
         # Constant parameters.
         sigma = 3.0 # width of gaussian convolution
         X_safe = 20.0 # when to stop evaluating negative time residuals in units of sigma
-        delta = 0.1 # how to combine the three regions that combine approximate and exact evaluation of hyp1f1 (required for convolutions). Small values are faster. Large values are more accurate.
+        delta = 0.01 # how to combine the three regions that combine approximate and exact evaluation of hyp1f1 (required for convolutions). Small values are faster. Large values are more accurate.
 
 
         dom_pos = event_data[:, :3]
