@@ -17,7 +17,7 @@ from lib.geo import center_track_pos_and_time_based_on_data_batched_v
 from lib.experimental_methods import get_clean_pulses_fn_v
 from lib.network import get_network_eval_v_fn
 
-from likelihood_mpe_padded_input import get_neg_c_triple_gamma_llh
+from likelihood_spe_padded_input import get_neg_c_triple_gamma_llh
 from lib.geo import get_xyz_from_zenith_azimuth, __c
 from dom_track_eval import get_eval_network_doms_and_track2 as get_eval_network_doms_and_track
 import time
@@ -28,9 +28,11 @@ eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/n
 eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=dtype)
 
 # Create padded batches (with different seq length).
-#tfrecord = "/home/storage2/hans/i3files/21220/ftr/data_ds_21220_from_*_to_*_1st_pulse.tfrecord"
-tfrecord = "/home/storage2/hans/i3files/21217/ftr/data_ds_21217_from_*_to_*_1st_pulse.tfrecord"
-batch_maker = I3SimBatchHandlerTFRecord(tfrecord, batch_size=8192)
+#tfrecord = "/home/storage2/hans/i3files/golden_muons/IC/NominalIce/MuMinus_150e3GeV_Horizontal_CloseToDOMs_Stochastic_N100_from_0_to_10_1st_pulse.tfrecord"
+#tfrecord = "/home/storage2/hans/i3files/golden_muons/IC/NominalIce/MuMinus_150e3GeV_Horizontal_FarFromDOMs_Stochastic_N100_from_0_to_10_1st_pulse.tfrecord"
+#tfrecord = "/home/storage2/hans/i3files/golden_muons/IC/NominalIce/MuMinus_150e3GeV_Horizontal_CloseToDOMs_Smooth_N100_from_0_to_10_1st_pulse.tfrecord"
+tfrecord = "/home/storage2/hans/i3files/golden_muons/IC/NominalIce/MuMinus_150e3GeV_Horizontal_FarFromDOMs_Smooth_N100_from_0_to_10_1st_pulse.tfrecord"
+batch_maker = I3SimBatchHandlerTFRecord(tfrecord, batch_size=100)
 batch_iter = batch_maker.get_batch_iterator()
 
 # Until LLH has a noise-term, we need to remove crazy early noise pulses
@@ -107,6 +109,4 @@ for i in range(n_batches):
 
 # store results.
 results = jnp.concatenate(results)
-#np.save("reco_result_21220_tfrecord_altrho2_1st_pulse_MPE_tsigma_2.0.npy", results)
-np.save("reco_result_21217_tfrecord_altrho2_1st_pulse_MPE_tsigma_2.0.npy", results)
-
+np.save("MuMinus_150e3GeV_Horizontal_FarFromDOMs_Smooth_N100_SPE.npy", results)

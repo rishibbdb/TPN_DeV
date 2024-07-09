@@ -4,6 +4,8 @@ import numpy as np
 
 from jax.scipy.special import gamma, gammaincc
 
+__sigma_scale = 3.0
+
 def c_multi_gamma_biweight_prob(x, mix_probs, a, b, sigma=3.0):
     # todo: consider exploring logsumexp trick (potentially more stable)
     # e.g. https://github.com/tensorflow/probability/blob/65f265c62bb1e2d15ef3e25104afb245a6d52429/tensorflow_probability/python/distributions/mixture_same_family.py#L348
@@ -12,61 +14,6 @@ def c_multi_gamma_biweight_prob(x, mix_probs, a, b, sigma=3.0):
 
 c_multi_gamma_biweight_prob_v = jax.vmap(c_multi_gamma_biweight_prob, (0, 0, 0, 0, None), 0)
 
-'''
-def c_gamma_biweight_prob(x, a, b, sigma=3.0):
-    s = 3.0 * sigma
-
-    g_a = gamma(a)
-    g_1pa = gamma(1+a)
-    g_2pa = gamma(2+a)
-    g_3pa = gamma(3+a)
-    g_4pa = gamma(4+a)
-
-    bspx = b*(s+x)
-    bxms = b*(x-s)
-
-    gincc_a = gammaincc(a, bspx) * g_a
-    gincc_1pa = gammaincc(1+a, bspx)*g_1pa
-    gincc_2pa = gammaincc(2+a, bspx)*g_2pa
-    gincc_3pa = gammaincc(3+a, bspx)*g_3pa
-    gincc_4pa = gammaincc(4+a, bspx)*g_4pa
-
-    gincc_a_m = gammaincc(a, bxms) * g_a
-    gincc_1pa_m = gammaincc(1+a, bxms)*g_1pa
-    gincc_2pa_m = gammaincc(2+a, bxms)*g_2pa
-    gincc_3pa_m = gammaincc(3+a, bxms)*g_3pa
-    gincc_4pa_m = gammaincc(4+a, bxms)*g_4pa
-
-    fbx = 4*b*x
-    t0 = b**4 * (s**4 - 2*s**2*x**2 + x**4)
-    t1 = 4*b**3 * (s**2*x - x**3)
-    t2 = b**2 * (6*x**2 - 2*s**2)
-
-    # branch 0 (-s < t < +s)
-    tsum0 = (
-                (g_a - gincc_a) * t0
-                + (g_1pa - gincc_1pa) * t1
-                + (g_2pa - gincc_2pa) * t2
-                + g_4pa - gincc_4pa
-                + gincc_3pa * fbx
-                - g_2pa * (2*fbx + a*fbx)
-    )
-
-    # branch 1 ( t >= +s)
-    tsum1 = (
-                (gincc_a_m - gincc_a) * t0
-                + (gincc_1pa_m - gincc_1pa) * t1
-                + (gincc_2pa_m - gincc_2pa) * t2
-                + (gincc_3pa - gincc_3pa_m) * fbx
-                + gincc_4pa_m - gincc_4pa
-    )
-
-    # combine branches
-    tsum = jnp.where(x < s, tsum0, tsum1)
-
-    pre_fac = 15.0/(16*b**4*s**5*g_a)
-    return pre_fac * tsum
-'''
 
 def branch0(x, a, b, s):
     # branch 0 (-s < x < +s)
@@ -144,7 +91,7 @@ def branch1(x, a, b, s):
 
 
 def c_gamma_biweight_prob(x, a, b, sigma=3.0):
-    s = 3.0 * sigma
+    s = __sigma_scale * sigma
     x0 = jnp.where(x < s, x, s)
     b0 = branch0(x0, a, b, s)
 
@@ -155,18 +102,14 @@ def c_gamma_biweight_prob(x, a, b, sigma=3.0):
 c_gamma_biweight_prob_v = jax.vmap(c_gamma_biweight_prob, (0, 0, 0, None), 0)
 
 
-def c_gamma_biweight_cdf(x, a, b, sigma=3.0):
+def branch0_cdf(x, a, b, s):
     g_a = gamma(a)
     bspx = b * (s+x)
     bspx_pa = jnp.power(bspx ,a)
-    exp_bspx = jnp.exp(bspx)
     exp_mbspx = jnp.exp(-bspx)
     g_a_bspx = g_a * gammaincc(a, bspx)
-    bxms = b * (x-s)
-    g_a_bxms = g_a * gammaincc(a, bxms)
     bx = b*x
 
-    # branch 0 x < s
     pre_factor = 1./(16.*b**5*s**5*(s+x)*g_a)
 
     c__11 = (
@@ -194,7 +137,21 @@ def c_gamma_biweight_cdf(x, a, b, sigma=3.0):
 
     c2 = (s+x) * c__21 * (g_a - g_a_bspx)
 
-    branch0 = pre_factor * (c1 + c2)
+    return pre_factor * (c1 + c2)
+
+
+def branch1_cdf(x, a, b, s):
+    g_a = gamma(a)
+    bspx = b * (s+x)
+    bspx_pa = jnp.power(bspx ,a)
+    exp_bspx = jnp.exp(bspx)
+    exp_mbspx = jnp.exp(-bspx)
+    g_a_bspx = g_a * gammaincc(a, bspx)
+    bxms = b * (x-s)
+    g_a_bxms = g_a * gammaincc(a, bxms)
+    bx = b*x
+
+    pre_factor = 1./(16.*b**5*s**5*(s+x)*g_a)
 
     # branch 1 x >= s:
     c__11 = (
@@ -236,11 +193,20 @@ def c_gamma_biweight_cdf(x, a, b, sigma=3.0):
         + g_a_bspx * c__22
     )
 
-    branch1 = pre_factor * (c1 + c2) * (s+x)
-    return jnp.where(x < s, branch0, branch1)
+    return pre_factor * (c1 + c2) * (s+x)
+
+
+def c_gamma_biweight_cdf(x, a, b, sigma=3.0):
+    s = __sigma_scale * sigma
+    x0 = jnp.where(x < s, x, s)
+    b0 = branch0_cdf(x0, a, b, s)
+
+    x1 = jnp.where(x < s, s, x)
+    b1 = branch1_cdf(x1, a, b, s)
+    return jnp.where(x < s, b0, b1)
 
 
 def c_multi_gamma_biweight_cdf(x, mix_probs, a, b, sigma=3.0):
     return jnp.sum(mix_probs * c_gamma_biweight_cdf(x, a, b, sigma), axis=-1)
 
-
+c_multi_gamma_biweight_cdf_v = jax.vmap(c_multi_gamma_biweight_cdf, (0, 0, 0, 0, None), 0)
