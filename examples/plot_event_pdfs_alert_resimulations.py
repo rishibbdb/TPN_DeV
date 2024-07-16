@@ -50,11 +50,11 @@ event_ids = ['1022', '10393', '10644', '10738', '11086', '11232', '13011',
        '9505']
 '''
 
-event_id = 10644
+event_id = 11232
 tfrecord = f"/home/storage2/hans/i3files/alerts/bfrv2/event_{event_id}_N100_from_0_to_10_1st_pulse.tfrecord"
 outdir = "/home/storage/hans/jax_reco_new/examples/event_plots/"
-sorting = 'charge' # 'distance'
-#sorting = 'distance'
+#sorting = 'charge' # 'distance'
+sorting = 'distance'
 
 batch_maker = I3SimBatchHandlerTFRecord(tfrecord, batch_size=100)
 batch_iter = batch_maker.get_batch_iterator()
@@ -172,9 +172,9 @@ for i in range(len(dom_pos)):
 dom_positions = list(dom_data.keys())
 
 if sorting == 'charge':
-	dom_positions.sort(key=lambda x: dom_data[x]['mean_q_tot'], reverse=True)
+    dom_positions.sort(key=lambda x: dom_data[x]['mean_q_tot'], reverse=True)
 else:
-	dom_positions.sort(key=lambda x: dom_data[x]['closest_approach_dist'] ,reverse=False)
+    dom_positions.sort(key=lambda x: dom_data[x]['closest_approach_dist'] ,reverse=False)
 
 n_plots = len(dom_positions)
 n_doms_per_page = 3
@@ -187,7 +187,7 @@ c_multi_gamma_sf_vx = jax.vmap(c_multi_gamma_sf, (0, None, None, None, None), 0)
 
 for i in range(0, int(np.min([n_plots, 60])), n_doms_per_page):
         print(i)
-        fig, ax = plt.subplots(n_doms_per_page, 2)
+        fig, ax = plt.subplots(n_doms_per_page, 3)
         for j in range(n_doms_per_page):
             pos = tuple(dom_positions[i])
             g_mix_p = dom_data[pos]['mix_probs']
@@ -198,17 +198,16 @@ for i in range(0, int(np.min([n_plots, 60])), n_doms_per_page):
             dist = dom_data[pos]['closest_approach_dist']
             z = dom_data[pos]['closest_approach_z']
             rho = dom_data[pos]['closest_approach_rho']
-            for k in range(2):
+            for k in range(3):
                 tax = ax[j, k]
-                tax.set_title(f"event {event_id} (dist={dist:.1f}m, z ={z:.0f}m, rho={rho:.0f}deg)", fontsize=6)
-                tax.set_xlim([np.min([-10, np.min(dom_data[pos]['first_hit_time'])])-1 , np.max([20, 3 * mode])])
 
                 if k == 0:
+                    tax.set_title(f"event {event_id} (dist={dist:.1f}m, z ={z:.0f}m, rho={rho:.0f}deg)", fontsize=6)
                     yval = c_multi_gamma_prob_vx(xvals, g_mix_p, g_a, g_b, sigma, delta)
                     tax.plot(xvals, yval, label='SPE PDF', color='black')
                     tax.set_ylim([0.0, 1.2 * np.amax(yval)])
 
-                else:
+                elif k == 1:
                     n_p_orig = dom_data[pos]['mean_q_tot']
                     n_p_orig = np.round(n_p_orig+0.5)
                     n_p = np.floor(np.min([3.6*np.exp(0.23*dist)+1, n_p_orig]))
@@ -225,20 +224,30 @@ for i in range(0, int(np.min([n_plots, 60])), n_doms_per_page):
                     tax.set_ylim([0.0, 1.2*np.amax([np.amax(yval1), np.amax(yval2)])])
 
 
-                tax.set_xlabel('delay time [ns]')
-                tax.set_ylabel('pdf')
-                for tx in dom_data[pos]['first_hit_time']:
-                    tax.axvline(tx, alpha=0.2, color='black', lw=0.5)
+                if k == 0 or k == 1:
+                    tax.set_xlabel('delay time [ns]')
+                    tax.set_ylabel('pdf')
+                    for tx in dom_data[pos]['first_hit_time']:
+                        tax.axvline(tx, alpha=0.1, color='black', lw=0.5)
 
-                xmax = np.max([20,  1.2 * np.amax(dom_data[pos]['first_hit_time'])])
-                tax.hist(dom_data[pos]['first_hit_time'], bins=np.linspace(-10, xmax, 15), density=True, alpha=0.3,
-                             label='first hit (from MC)', color='tab:green')
-                tax.legend(fontsize=6)
+                    xmax = np.max([20,  1.2 * np.amax(dom_data[pos]['first_hit_time'])])
+                    tax.hist(dom_data[pos]['first_hit_time'], density=True, alpha=0.5,
+                                 label='first hit (from MC)', color='tab:green')
+                    tax.legend(fontsize=5)
+                    tax.set_xlim([np.min([-10, np.min(dom_data[pos]['first_hit_time'])])-1 , np.max([20, 3 * mode])])
+
+                if k == 2:
+                    tax.hist(dom_data[pos]['q_tot'], color='tab:blue', histtype='step', lw=2)
+                    tax.hist(dom_data[pos]['q_tot'], color='tab:blue', alpha=0.5)
+                    tax.axvline(dom_data[pos]['mean_q_tot'], alpha=0.5, color='black', lw=1)
+                    tax.set_xlabel('total charge [p.e.]')
+                    tax.set_ylabel('counts')
 
 
             i+=1
 
-        plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
+        plt.tight_layout(pad=0.2, w_pad=0.2, h_pad=1.0)
+
         pdf.savefig(fig)
         plt.close()
 
