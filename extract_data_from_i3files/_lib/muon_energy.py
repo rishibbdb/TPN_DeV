@@ -265,3 +265,5 @@ def add_muon_energy(frame):
     nu, lepton, hadrons, nu_out = get_interacting_neutrino_and_daughters(frame)
     mu_e = np.nan if lepton is None else lepton.energy
     frame.Put("TrueMuonEnergyAtInteraction", dataclasses.I3Double(mu_e))
+    if not frame.Has('MCMostEnergeticTrack'):
+        frame.Put("MCMostEnergeticTrack", lepton)

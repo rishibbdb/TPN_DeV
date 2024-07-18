@@ -52,12 +52,12 @@ class Unfold(icetray.I3Module):
 
     def Physics(self, frame):
         if not frame.Has(self.input_loss_vect_name):
-            print('no unfolding for {}'.format(self.input_loss_vect_name))
+            #print('no unfolding for {}'.format(self.input_loss_vect_name))
             self.PushFrame(frame)
             return True
 
         self.millipede = millipede.PyPyMillipede(self.context)
-        print('Lets unfold the true losses')
+        #print('Lets unfold the true losses')
         ExQdict = defaultdict(list)
 
         if self.input_loss_vect_name == 'I3MCTree':
@@ -70,7 +70,7 @@ class Unfold(icetray.I3Module):
                     if not 'Mu' in str(loss.type):
                         sources.append(loss)
 
-            print(len(sources))
+            #print(len(sources))
 
                 #loss for loss in I3MCTree.get_daughters(p) for p in
                 #    I3MCTree.get_daughters(
@@ -92,7 +92,7 @@ class Unfold(icetray.I3Module):
         self.millipede.SetParameter('ReadoutWindow', self.readout_window)
         self.millipede.DatamapFromFrame(frame)
         response = self.millipede.GetResponseMatrix(sources)
-        print('Fit Statistics For Losses:', self.millipede.FitStatistics(sources, response, params=None))
+        #print('Fit Statistics For Losses:', self.millipede.FitStatistics(sources, response, params=None))
         edeps = [p.energy for p in sources]
         responsemat = response.to_I3Matrix()
 
@@ -133,4 +133,4 @@ class Unfold(icetray.I3Module):
         frame[self.fitname + '_' + self.input_loss_vect_name +
                   '_ExQ'] = dataclasses.I3MapKeyVectorDouble(ExQdict)
         self.PushFrame(frame)
-        print('Unfold done\n')
+        #print('Unfold done\n')

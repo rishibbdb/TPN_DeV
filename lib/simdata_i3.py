@@ -33,24 +33,30 @@ class I3SimHandler:
         event_data = (self.events_data.iloc[int(event_meta.idx_start): int(event_meta.idx_end + 1)]).copy(deep=True)
         return event_meta, event_data
 
-    def get_per_dom_summary_from_sim_data(self, meta: pd.DataFrame, pulses: pd.DataFrame) -> pd.DataFrame:
-        df_qtot = pulses[['sensor_id', 'charge']].groupby(by=['sensor_id'], as_index=False).sum()
+    def get_per_dom_summary_from_sim_data(self, meta: pd.DataFrame, pulses: pd.DataFrame, charge_key='charge') -> pd.DataFrame:
+        df_qtot = pulses[['sensor_id', charge_key]].groupby(by=['sensor_id'], as_index=False).sum()
         df_tmin = pulses[['sensor_id', 'time']].groupby(by=['sensor_id'], as_index=False).min()
         df = df_qtot.merge(self.geo.iloc[df_qtot['sensor_id']], on='sensor_id', how='outer')
         df['time'] = df_tmin['time'].values
+
+        if charge_key != 'charge':
+            df.rename({charge_key: 'charge'}, inplace=True, axis='columns')
         return df
 
-    def get_per_dom_summary_from_index(self, event_index: int) -> pd.DataFrame:
+    def get_per_dom_summary_from_index(self, event_index: int, charge_key='charge') -> pd.DataFrame:
         meta, pulses = self.get_event_data(event_index)
-        df_qtot = pulses[['sensor_id', 'charge']].groupby(by=['sensor_id'], as_index=False).sum()
+        df_qtot = pulses[['sensor_id', charge_key]].groupby(by=['sensor_id'], as_index=False).sum()
         df_tmin = pulses[['sensor_id', 'time']].groupby(by=['sensor_id'], as_index=False).min()
         df = df_qtot.merge(self.geo.iloc[df_qtot['sensor_id']], on='sensor_id', how='outer')
-        df['time'] = df_tmin['time'].values
+        df['time'] = df_tmin['time'].valuesA
+
+        if charge_key != 'charge':
+            df.rename({charge_key: 'charge'}, inplace=True, axis='columns')
         return df
 
     def get_per_dom_summary_extended_from_sim_data(self,
                                                 meta: pd.DataFrame,
-												pulses: pd.DataFrame,
+                                                pulses: pd.DataFrame,
                                                 n_pulses: int=5) -> np.ndarray:
 
         pulses_sorted = pulses.sort_values(["sensor_id", "time"]).groupby("sensor_id").head(n_pulses)
