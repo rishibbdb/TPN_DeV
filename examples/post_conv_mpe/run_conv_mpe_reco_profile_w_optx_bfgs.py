@@ -20,6 +20,7 @@ from lib.simdata_i3 import I3SimHandler
 from lib.geo import center_track_pos_and_time_based_on_data
 from lib.network import get_network_eval_v_fn
 from lib.experimental_methods import remove_early_pulses
+#from dom_track_eval import get_eval_network_doms_and_track2 as get_eval_network_doms_and_track
 from dom_track_eval import get_eval_network_doms_and_track as get_eval_network_doms_and_track
 from likelihood_conv_mpe import get_neg_c_triple_gamma_llh
 
