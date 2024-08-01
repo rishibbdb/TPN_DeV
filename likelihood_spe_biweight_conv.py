@@ -1,4 +1,4 @@
-from lib.cgamma_biweight_v2 import c_multi_gamma_biweight_prob_v
+from lib.cgamma_biweight import c_multi_gamma_biweight_prob_v
 import jax
 import jax.numpy as jnp
 
