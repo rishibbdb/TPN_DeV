@@ -7,55 +7,49 @@ from jax.scipy.stats.norm import pdf as norm_pdf
 
 from lib.gamma_sf_approx import gamma_sf_fast
 
-try:
+from tensorflow_probability.substrates import jax as tfp
+tfd = tfp.distributions
 
-    from tensorflow_probability.substrates import jax as tfp
-    tfd = tfp.distributions
-
-    def c_multi_gamma_mpe_prob(x, logits, a, b, n, sigma):
-        g_pdf = tfd.MixtureSameFamily(
-                      mixture_distribution=tfd.Categorical(
-                          logits=logits
-                          ),
-                      components_distribution=tfd.Gamma(
-                        concentration=a,
-                        rate=b,
-                        force_probs_to_zero_outside_support=True
-                          )
-                    )
-
-        gn = tfp.distributions.Normal(
-                    x,
-                    sigma,
-                    validate_args=False,
-                    allow_nan_stats=False,
-                    name='Normal'
+def c_multi_gamma_mpe_prob(x, logits, a, b, n, sigma):
+    g_pdf = tfd.MixtureSameFamily(
+                  mixture_distribution=tfd.Categorical(
+                      logits=logits
+                      ),
+                  components_distribution=tfd.Gamma(
+                    concentration=a,
+                    rate=b,
+                    force_probs_to_zero_outside_support=True
+                      )
                 )
 
-        nmax = 6
-        nint = 11
-        eps = 1.e-6
+    gn = tfp.distributions.Normal(
+                x,
+                sigma,
+                validate_args=False,
+                allow_nan_stats=False,
+                name='Normal'
+            )
 
-        xmax = jnp.max(jnp.array([jnp.array(nmax * sigma), x + nmax * sigma]))
-        diff = xmax-x
-        xmin = jnp.max(jnp.array([jnp.array(0.0)+eps, x - diff]))
-        xvals = jnp.linspace(xmin, xmax, nint)
+    nmax = 6
+    nint = 11
+    eps = 1.e-6
 
-        n_pdf = gn.prob(0.5*(xvals[:-1]+xvals[1:]))
-        sfs_power_n = jnp.power(g_pdf.survival_function(xvals), n)
+    xmax = jnp.max(jnp.array([jnp.array(nmax * sigma), x + nmax * sigma]))
+    diff = xmax-x
+    xmin = jnp.max(jnp.array([jnp.array(0.0)+eps, x - diff]))
+    xvals = jnp.linspace(xmin, xmax, nint)
 
-        return jnp.sum( n_pdf * (sfs_power_n[:-1]-sfs_power_n[1:]) )
+    n_pdf = gn.prob(0.5*(xvals[:-1]+xvals[1:]))
+    sfs_power_n = jnp.power(g_pdf.survival_function(xvals), n)
 
-    c_multi_gamma_mpe_prob_v = jax.vmap(c_multi_gamma_mpe_prob, (0, 0, 0, 0, 0, None), 0)
+    return jnp.sum( n_pdf * (sfs_power_n[:-1]-sfs_power_n[1:]) )
 
-except ImportError:
-    print("could not find tensorflow_probabilty with jax backend.")
-    print("will not use c_multi_gamma_mpe_prob.")
+c_multi_gamma_mpe_prob_v = jax.vmap(c_multi_gamma_mpe_prob, (0, 0, 0, 0, 0, None), 0)
 
 
 def c_multi_gamma_mpe_prob_pure_jax(x, mix_probs, a, b, n, sigma=3.0):
-    nmax = 8
-    nint = 8
+    nmax = 10
+    nint = 41
     eps = 1.e-6
 
     xmax = jnp.max(jnp.array([jnp.array(nmax * sigma), x + nmax * sigma]))

@@ -3,6 +3,13 @@ import jax
 import numpy as np
 
 from jax.scipy.special import gammaincc, erf
+from lib.gamma_sf_approx import gamma_sf_fast_w_existing_coefficients, c_coeffs
+
+_M_LN2 = jnp.log(2.0)
+_M_SQRTPI = jnp.sqrt(np.pi)
+_M_E = jnp.exp(1.0)
+_M_SQRT2 = jnp.sqrt(2.0)
+
 
 def c_multi_gamma_prob(x, mix_probs, a, b, sigma=3.0, delta=10.0):
     # todo: consider exploring logsumexp trick (potentially more stable)
@@ -69,7 +76,6 @@ def _c_gamma_region3(x, a, b, sigma=3):
     Note: a := ksi
     """
 
-    M_LN2 = jnp.log(2.0)
     rhosigma = b*sigma
     eta = rhosigma - x/sigma
     ksi21 = 2.*a - 1
@@ -93,7 +99,7 @@ def _c_gamma_region3(x, a, b, sigma=3):
     delay2 = x*x
     eta2 = eta*eta
     alpha=(-0.5*delay2/sigma2 + 0.25*eta2 - 0.5*a + 0.25 + k*ksi21 - 0.5*jnp.log(sqrt1plusz2) -\
-           0.5*a*M_LN2 + 0.5*(a-1.)*jnp.log(ksi21) + a*jnp.log(rhosigma))
+           0.5*a*_M_LN2 + 0.5*(a-1.)*jnp.log(ksi21) + a*jnp.log(rhosigma))
     phi = 1. - n1/ksi21 + n2/ksi212 - n3/ksi213
 
     return jnp.exp(alpha)*phi/jax.scipy.special.gamma(a)/sigma
@@ -107,9 +113,6 @@ def _c_gamma_region4(x, a, b, sigma=3):
     Note: a := ksi
     """
 
-    M_SQRTPI = jnp.sqrt(np.pi)
-    M_E = jnp.exp(1.0)
-    M_SQRT2 = jnp.sqrt(2.0)
     rhosigma = b*sigma
     eta = rhosigma - x/sigma
     ksi21 = 2.*a - 1
@@ -133,9 +136,9 @@ def _c_gamma_region4(x, a, b, sigma=3):
     delay2 = x*x
     eta2 = eta*eta
 
-    u = jnp.power(2.*M_E/ksi21, a/2.)*jnp.exp(-0.25)/M_SQRT2
+    u = jnp.power(2.*_M_E/ksi21, a/2.)*jnp.exp(-0.25)/_M_SQRT2
     psi = 1. + n1/ksi21 + n2/ksi212 + n3/ksi213
-    cpandel= jnp.power(rhosigma, a)/sigma * jnp.exp(-0.5*delay2/sigma2+0.25*eta2) / (M_SQRT2*M_SQRTPI)
+    cpandel= jnp.power(rhosigma, a)/sigma * jnp.exp(-0.5*delay2/sigma2+0.25*eta2) / (_M_SQRT2*_M_SQRTPI)
 
     return  cpandel * u * jnp.exp(-k*ksi21) * psi / jnp.sqrt(sqrt1plusz2)
 
@@ -182,3 +185,53 @@ def c_multi_gamma_sf(x, mix_probs, a, b, sigma=3.0):
     return jnp.sum(mix_probs * probs, axis=-1)
 
 c_multi_gamma_sf_v = jax.jit(jax.vmap(c_multi_gamma_sf, (0, 0, 0, 0, None), 0))
+
+
+def c_gamma_sf_approx(x, a, b, sigma=3.0):
+    """
+    following arXiv:astro-ph/0506136
+	but uses approximate functions for regularized incomplete gamma functions.
+    experimental. do not use.
+    """
+    alpha = 2.5 # controls the split of the integral => precision.
+    n_steps = 40 # controls the support points in trapezoidal integration
+    eps = 1.e-6
+
+    sqrt2sigma2 = jnp.sqrt(2.0*sigma**2)
+
+    ymin = x - alpha*sqrt2sigma2 # start of numeric integration
+    ymin = jnp.where(ymin >= 0.0, ymin, 0.0)
+
+    ymax = x + alpha*sqrt2sigma2 # end of numeric integration
+    ymax = jnp.where(ymax >= 0.0, ymax, 0.0)
+    # todo: think about special case when ymin = ymax = 0.0
+    # based on testing so far: no need to do anything.
+
+    c = c_coeffs(a)
+    term1 = gamma_sf_fast_w_existing_coefficients(ymax, a, b, c) + gamma_sf_fast_w_existing_coefficients(ymin, a, b, c)
+    term2 = jnp.power(b, a) # J in arXiv:astro-ph/0506136
+
+    x_int = jnp.linspace(ymin, ymax, n_steps+1, axis=-1)
+    x_int = 0.5*(x_int[...,1:] + x_int[...,:-1])
+    dx = jnp.expand_dims(x_int[..., 1] - x_int[..., 0], axis=-1)
+
+    # add dimension to end for proper broadcasting during integration
+    # and then integrate by brute force on even grid
+    # todo: come up with something faster and more accurate?
+    a_e = jnp.expand_dims(a, axis=-1)
+    b_e = jnp.expand_dims(b, axis=-1)
+    y_int = jnp.power(x_int, a_e-1) * jnp.exp(-b_e*x_int) * erf((x-x_int)/sqrt2sigma2)
+    term2 *= jnp.sum(y_int * dx, axis=-1)
+
+    sf = 0.5 * (term1 - term2/jax.scipy.special.gamma(a))
+    return jnp.clip(sf, min=eps, max=1.0)
+
+
+def c_multi_gamma_sf_approx(x, mix_probs, a, b, sigma=3.0):
+    """
+    experimental. do not use.
+    """
+    probs = c_gamma_sf_approx(x, a, b, sigma=sigma)
+    return jnp.sum(mix_probs * probs, axis=-1)
+
+c_multi_gamma_sf_approx_v = jax.jit(jax.vmap(c_multi_gamma_sf_approx, (0, 0, 0, 0, None), 0))

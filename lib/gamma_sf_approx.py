@@ -95,5 +95,28 @@ def regularized_lower_incomplete_gamma_approx(x, a):
     return r1+r2
 
 
+def regularized_lower_incomplete_gamma_approx_w_existing_coefficients(x, a, c):
+    """
+    note: the original paper treats the lower incomplete gamma function.
+    The regularized lower incomplete gamma function differs by the
+    normalization factor 1/Gamma[a].
+    """
+
+    # eq. 13
+    w = 0.5 + 0.5 * jnp.tanh(c[1]*(x-c[2]))
+
+    # alternatively, use approximate tanh.
+    #w = 0.5 + 0.5 * tanh_approx(c[1]*(x-c[2]))
+
+    # eq. 12
+    r1 = 1.0/jax.scipy.special.gamma(a) * jnp.exp(-x)*jnp.power(x, a)*(1.0/a + c[0]*x/(a*(a+1)) + (c[0]*x)**2/(a*(a+1)*(a+2)))*(1-w)
+    r2 = w*(1.0-jnp.power(c[3], -x))
+    return r1+r2
+
+
 def gamma_sf_fast(x, a, b):
     return jnp.clip(1.0-regularized_lower_incomplete_gamma_approx(x*b, a), min=0.0, max=1.0)
+
+
+def gamma_sf_fast_w_existing_coefficients(x, a, b, c):
+    return jnp.clip(1.0-regularized_lower_incomplete_gamma_approx_w_existing_coefficients(x*b, a, c), min=0.0, max=1.0)
