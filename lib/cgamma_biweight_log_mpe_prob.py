@@ -58,10 +58,11 @@ def _branch0(x, a, b, s, gincc_a_bspx, gincc_a_bxms):
     ginc_a = g_a - gincc_a_bspx
     #ginc_a = gammainc(a, bspx) * g_a
     # use recurrence relation of lower incomplete gamma function to avoid further gammainc calls
-    ginc_1pa = a * ginc_a - bspx_pa * jnp.exp(-bspx)
-    ginc_2pa = (1+a) * ginc_1pa - bspx_pa*bspx * jnp.exp(-bspx)
-    ginc_3pa = (2+a) * ginc_2pa - bspx_pa*bspx*bspx * jnp.exp(-bspx)
-    ginc_4pa = (3+a) * ginc_3pa - bspx_pa*bspx*bspx*bspx * jnp.exp(-bspx)
+    exp_mbspx = jnp.exp(-bspx)
+    ginc_1pa = a * ginc_a - bspx_pa * exp_mbspx
+    ginc_2pa = (1+a) * ginc_1pa - bspx_pa*bspx * exp_mbspx
+    ginc_3pa = (2+a) * ginc_2pa - bspx_pa*bspx*bspx * exp_mbspx
+    ginc_4pa = (3+a) * ginc_3pa - bspx_pa*bspx*bspx*bspx * exp_mbspx
 
     fbx = 4*b*x
     t0 = b**4 * (s**4 - 2*s**2*x**2 + x**4)
@@ -98,17 +99,19 @@ def _branch1(x, a, b, s, gincc_a_bspx, gincc_a_bxms):
 
     gincc_a = gincc_a_bspx
     # use recurrence relation of lower incomplete gamma function to avoid further gammainc calls
-    gincc_1pa = a * gincc_a + bspx_pa * jnp.exp(-bspx)
-    gincc_2pa = (1+a) * gincc_1pa + bspx_pa*bspx * jnp.exp(-bspx)
-    gincc_3pa = (2+a) * gincc_2pa + bspx_pa*bspx*bspx * jnp.exp(-bspx)
-    gincc_4pa = (3+a) * gincc_3pa + bspx_pa*bspx*bspx*bspx * jnp.exp(-bspx)
+    exp_mbspx = jnp.exp(-bspx)
+    gincc_1pa = a * gincc_a + bspx_pa * exp_mbspx
+    gincc_2pa = (1+a) * gincc_1pa + bspx_pa*bspx * exp_mbspx
+    gincc_3pa = (2+a) * gincc_2pa + bspx_pa*bspx*bspx * exp_mbspx
+    gincc_4pa = (3+a) * gincc_3pa + bspx_pa*bspx*bspx*bspx * exp_mbspx
 
     gincc_a_m = gincc_a_bxms
     # use recurrence relation of lower incomplete gamma function to avoid further gammainc calls
-    gincc_1pa_m = a * gincc_a_m + bxms_pa * jnp.exp(-bxms)
-    gincc_2pa_m = (1+a) * gincc_1pa_m + bxms_pa*bxms * jnp.exp(-bxms)
-    gincc_3pa_m = (2+a) * gincc_2pa_m + bxms_pa*bxms*bxms * jnp.exp(-bxms)
-    gincc_4pa_m = (3+a) * gincc_3pa_m + bxms_pa*bxms*bxms*bxms * jnp.exp(-bxms)
+    exp_mbxms = jnp.exp(-bxms)
+    gincc_1pa_m = a * gincc_a_m + bxms_pa * exp_mbxms
+    gincc_2pa_m = (1+a) * gincc_1pa_m + bxms_pa*bxms * exp_mbxms
+    gincc_3pa_m = (2+a) * gincc_2pa_m + bxms_pa*bxms*bxms * exp_mbxms
+    gincc_4pa_m = (3+a) * gincc_3pa_m + bxms_pa*bxms*bxms*bxms * exp_mbxms
 
     fbx = 4*b*x
     t0 = b**4 * (s**4 - 2*s**2*x**2 + x**4)

@@ -147,9 +147,10 @@ def c_gamma_sf(x, a, b, sigma=3.0):
     """
     following arXiv:astro-ph/0506136
     """
-    alpha = 2.5 # controls the split of the integral => precision.
-    n_steps = 40 # controls the support points in trapezoidal integration
-    eps = 1.e-6
+    #alpha = 2.5 # controls the split of the integral => precision.
+    alpha = 2.5
+    n_steps = 40 # controls the support points in midpoint integration
+    eps = 1.e-15
 
     sqrt2sigma2 = jnp.sqrt(2.0*sigma**2)
 

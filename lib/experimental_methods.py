@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 
 def remove_early_pulses(eval_network_doms_and_track, data, track_pos, track_dir, track_time):
-    crit = -15.0
+    crit = -10.0
     _, _, _, geo_times = eval_network_doms_and_track(data[:,:3], track_pos, track_dir)
     delay_times = data[:, 3] - geo_times - track_time
     idx = delay_times > crit
@@ -17,7 +17,8 @@ def get_clean_pulses_fn(eval_network_doms_and_track_fn, n_pulses=1):
         track_time = mctruth[4]
         track_pos = mctruth[5:8]
 
-        crit = -15.0
+        crit = -10.0
+        #_, _, _, geo_times, _ = eval_network_doms_and_track_fn(data[:,:3], track_pos, track_src)
         _, _, _, geo_times = eval_network_doms_and_track_fn(data[:,:3], track_pos, track_src)
         delay_times = data[:, 3] - geo_times - track_time
         idx = delay_times > crit
