@@ -25,6 +25,8 @@ from palettable.cubehelix import Cubehelix
 cx =Cubehelix.make(start=0.3, rotation=-0.5, n=16, reverse=False, gamma=1.0,
                            max_light=1.0,max_sat=0.5, min_sat=1.4).get_mpl_colormap()
 
+import time
+
 # Number of scan points on 1D
 n_eval = 50 # making it a 20x20 grid
 
@@ -33,7 +35,8 @@ dzen = 0.05 # rad
 dazi = 0.05 # rad
 
 # Event Index.
-event_index = 2
+# Event Index.
+event_index = int(sys.argv[1])
 
 # Get network and eval logic.
 eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/network', dtype=jnp.float32)
@@ -124,13 +127,15 @@ azimuth = jnp.linspace(track_src[1]-dzen, track_src[1]+dazi, n_eval)
 X, Y = jnp.meshgrid(zenith, azimuth)
 init_dirs = jnp.column_stack([X.flatten(), Y.flatten()])
 
+tic = time.time()
 logls = run_3D_v(init_dirs)
+toc = time.time()
+print(f"jit + reco of grid took {toc-tic:.1f}s.")
 logls = logls.reshape(X.shape)
 
 
 fig, ax = plt.subplots()
 delta_logl = logls - np.nanmin(logls)
-print(logls)
 delta_logl = np.where(np.isnan(logls), 1000, delta_logl)
 pc = ax.pcolormesh(np.rad2deg(X), np.rad2deg(Y), delta_logl, vmin=0, vmax=np.min([25, 1.2*np.amax(delta_logl)]), shading='auto', cmap=cx)
 cbar = fig.colorbar(pc)
@@ -162,4 +167,4 @@ ct = plt.contour(np.rad2deg(X), np.rad2deg(Y), delta_logl, levels=contours, line
 
 plt.legend()
 plt.tight_layout()
-plt.savefig(f"scan_ev_{event_index}.png", dpi=300)
+plt.savefig(f"scan_ev_{event_index}_biweight_conv_spe.png", dpi=300)

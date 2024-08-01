@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import jax
 import numpy as np
 
-from jax.scipy.special import gamma, gammaincc
+from jax.scipy.special import gamma, gammaincc, gammainc
 
 __sigma_scale = 3.0
 
@@ -17,19 +17,23 @@ c_multi_gamma_biweight_prob_v = jax.vmap(c_multi_gamma_biweight_prob, (0, 0, 0, 
 
 def branch0(x, a, b, s):
     # branch 0 (-s < x < +s)
+
     g_a = gamma(a)
-    g_1pa = gamma(1+a)
-    g_2pa = gamma(2+a)
-    g_3pa = gamma(3+a)
-    g_4pa = gamma(4+a)
+    # use recurrence relation of gamma to avoid further gamma calls
+    g_1pa = a * g_a
+    g_2pa = (a+1) * g_1pa
+    g_3pa = (a+2) * g_2pa
+    g_4pa = (a+3) * g_3pa
 
     bspx = b*(s+x)
+    bspx_pa = jnp.power(bspx, a)
 
-    gincc_a = gammaincc(a, bspx) * g_a
-    gincc_1pa = gammaincc(1+a, bspx)*g_1pa
-    gincc_2pa = gammaincc(2+a, bspx)*g_2pa
-    gincc_3pa = gammaincc(3+a, bspx)*g_3pa
-    gincc_4pa = gammaincc(4+a, bspx)*g_4pa
+    ginc_a = gammainc(a, bspx) * g_a
+    # use recurrence relation of lower incomplete gamma function to avoid further gammainc calls
+    ginc_1pa = a * ginc_a - bspx_pa * jnp.exp(-bspx)
+    ginc_2pa = (1+a) * ginc_1pa - bspx_pa*bspx * jnp.exp(-bspx)
+    ginc_3pa = (2+a) * ginc_2pa - bspx_pa*bspx*bspx * jnp.exp(-bspx)
+    ginc_4pa = (3+a) * ginc_3pa - bspx_pa*bspx*bspx*bspx * jnp.exp(-bspx)
 
     fbx = 4*b*x
     t0 = b**4 * (s**4 - 2*s**2*x**2 + x**4)
@@ -37,11 +41,11 @@ def branch0(x, a, b, s):
     t2 = b**2 * (6*x**2 - 2*s**2)
 
     tsum0 = (
-                (g_a - gincc_a) * t0
-                + (g_1pa - gincc_1pa) * t1
-                + (g_2pa - gincc_2pa) * t2
-                + g_4pa - gincc_4pa
-                + gincc_3pa * fbx
+                ginc_a * t0
+                + ginc_1pa * t1
+                + ginc_2pa * t2
+                + ginc_4pa
+                + (g_3pa - ginc_3pa) * fbx
                 - g_2pa * (2*fbx + a*fbx)
     )
 
@@ -49,29 +53,35 @@ def branch0(x, a, b, s):
     return pre_fac * tsum0
 
 
+
 def branch1(x, a, b, s):
     # branch 1 (s > x)
 
     g_a = gamma(a)
-    g_1pa = gamma(1+a)
-    g_2pa = gamma(2+a)
-    g_3pa = gamma(3+a)
-    g_4pa = gamma(4+a)
+    # use recurrence relation of gamma to avoid further gamma calls
+    g_1pa = a * g_a
+    g_2pa = (a+1) * g_1pa
+    g_3pa = (a+2) * g_2pa
+    g_4pa = (a+3) * g_3pa
 
     bspx = b*(s+x)
+    bspx_pa = jnp.power(bspx, a)
     bxms = b*(x-s)
+    bxms_pa = jnp.power(bxms, a)
 
     gincc_a = gammaincc(a, bspx) * g_a
-    gincc_1pa = gammaincc(1+a, bspx)*g_1pa
-    gincc_2pa = gammaincc(2+a, bspx)*g_2pa
-    gincc_3pa = gammaincc(3+a, bspx)*g_3pa
-    gincc_4pa = gammaincc(4+a, bspx)*g_4pa
+    # use recurrence relation of lower incomplete gamma function to avoid further gammainc calls
+    gincc_1pa = a * gincc_a + bspx_pa * jnp.exp(-bspx)
+    gincc_2pa = (1+a) * gincc_1pa + bspx_pa*bspx * jnp.exp(-bspx)
+    gincc_3pa = (2+a) * gincc_2pa + bspx_pa*bspx*bspx * jnp.exp(-bspx)
+    gincc_4pa = (3+a) * gincc_3pa + bspx_pa*bspx*bspx*bspx * jnp.exp(-bspx)
 
     gincc_a_m = gammaincc(a, bxms) * g_a
-    gincc_1pa_m = gammaincc(1+a, bxms)*g_1pa
-    gincc_2pa_m = gammaincc(2+a, bxms)*g_2pa
-    gincc_3pa_m = gammaincc(3+a, bxms)*g_3pa
-    gincc_4pa_m = gammaincc(4+a, bxms)*g_4pa
+    # use recurrence relation of lower incomplete gamma function to avoid further gammainc calls
+    gincc_1pa_m = a * gincc_a_m + bxms_pa * jnp.exp(-bxms)
+    gincc_2pa_m = (1+a) * gincc_1pa_m + bxms_pa*bxms * jnp.exp(-bxms)
+    gincc_3pa_m = (2+a) * gincc_2pa_m + bxms_pa*bxms*bxms * jnp.exp(-bxms)
+    gincc_4pa_m = (3+a) * gincc_3pa_m + bxms_pa*bxms*bxms*bxms * jnp.exp(-bxms)
 
     fbx = 4*b*x
     t0 = b**4 * (s**4 - 2*s**2*x**2 + x**4)

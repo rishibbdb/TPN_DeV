@@ -1,5 +1,4 @@
-from lib.cgamma_biweight import c_multi_gamma_biweight_prob_v
-from lib.cgamma_biweight import c_multi_gamma_biweight_cdf_v
+from lib.cgamma_biweight_log_mpe_prob import c_multi_gamma_biweight_mpe_logprob
 import jax
 import jax.numpy as jnp
 
@@ -15,10 +14,8 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
                                event_data):
 
         # Constant parameters.
-        sigma = 3.0 # width of gaussian convolution
-        X_safe = 2.9 # when to stop evaluating negative time residuals in units of sigma
-        delta = 0.01 # how to combine the three regions that combine approximate and exact evaluation of hyp1f1 (required for convolutions). Small values are faster. Large values are more accurate.
-
+        sigma = jnp.array(4.0) # width of gaussian convolution
+        X_safe = jnp.array(2.9) # when to stop evaluating negative time residuals in units of sigma
 
         dom_pos = event_data[:, :3]
         first_hit_times = event_data[:, 3]
@@ -35,15 +32,9 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
         # Todo: think about noise.
         safe_delay_time = jnp.where(delay_time > -X_safe * sigma, delay_time, -X_safe * sigma)
 
-        probs = c_multi_gamma_biweight_prob_v(safe_delay_time,
-                                            mix_probs,
-                                            av,
-                                            bv,
-                                            sigma)
+        safe_delay_time = jnp.expand_dims(safe_delay_time, axis=-1)
 
-        cdfs = c_multi_gamma_biweight_cdf_v(safe_delay_time, mix_probs, av, bv, sigma)
-
-        mpe_log_probs = jnp.log(n_photons) + jnp.log(probs) + (n_photons-1.0) * jnp.log(1-cdfs)
+        mpe_log_probs = c_multi_gamma_biweight_mpe_logprob(safe_delay_time, mix_probs, av, bv, n_photons, sigma)
         return -2.0 * jnp.sum(mpe_log_probs)
 
 
