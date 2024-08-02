@@ -120,7 +120,8 @@ def neg_llh_3D(x, track_dir):
     return neg_llh(track_dir, x*scale, centered_track_time, fitting_event_data)
 
 def run_3D(track_dir):
-    x0 = jnp.array(centered_track_pos/scale)
+    #x0 = jnp.array(centered_track_pos/scale)
+    x0 = best_x[2:]
     values = optx.minimise(neg_llh_3D, solver, x0, args=track_dir, throw=False).value
     return neg_llh_3D(values, track_dir)
 
