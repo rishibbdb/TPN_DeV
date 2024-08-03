@@ -180,18 +180,34 @@ def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14):
 
     parse = lambda x: parse_tfr_element(x, n_features=n_features, n_labels=n_labels)
     dataset = dataset.map(parse, num_parallel_calls=tf.data.AUTOTUNE)
-    #dataset = dataset.map(parse_tfr_element, num_parallel_calls=tf.data.AUTOTUNE)
     dataset = dataset.map(lambda x, y: (x, y), num_parallel_calls=tf.data.AUTOTUNE)
 
-    n_doms_max = 1000
-    n_bins = 8
+    #n_doms_max = 1000
+    #n_bins = 8
+    #_element_length_funct = lambda x, y: tf.shape(x)[0]
+    #dataset = dataset.bucket_by_sequence_length(
+    #        element_length_func = _element_length_funct,
+    #        bucket_boundaries = np.logspace(1, np.log10(n_doms_max), n_bins+1).astype(int).tolist(),
+    #        bucket_batch_sizes = [batch_size]*(n_bins+2),
+    #        drop_remainder = False,
+    #        pad_to_bucket_boundary=False,
+    #    )
+
+    n_doms_max = 5170
+    n_bins = 25
+    edges = np.logspace(0.5, np.log10(n_doms_max), n_bins+1).astype(int)
+    factor = np.median(edges[1:] / edges[:-1])
+    scale = np.power(factor, np.arange(n_bins+2)[::-1])
+    bucket_batch_sizes = scale * batch_size
+    bucket_batch_sizes = bucket_batch_sizes.astype(int)
+
     _element_length_funct = lambda x, y: tf.shape(x)[0]
     dataset = dataset.bucket_by_sequence_length(
             element_length_func = _element_length_funct,
-            bucket_boundaries = np.logspace(1, np.log10(n_doms_max), n_bins+1).astype(int).tolist(),
-            bucket_batch_sizes = [batch_size]*(n_bins+2),
+            bucket_boundaries = edges.tolist(),
+            bucket_batch_sizes = bucket_batch_sizes.tolist(),
             drop_remainder = False,
-            pad_to_bucket_boundary=False,
+            pad_to_bucket_boundary=True,
         )
 
     return dataset.prefetch(tf.data.AUTOTUNE)
