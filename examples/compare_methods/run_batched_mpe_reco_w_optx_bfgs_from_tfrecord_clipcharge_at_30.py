@@ -1,6 +1,6 @@
 import sys, os
 sys.path.insert(0, "/home/storage/hans/jax_reco_new")
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import jax.numpy as jnp
 from jax.scipy import optimize
@@ -17,10 +17,11 @@ from lib.geo import center_track_pos_and_time_based_on_data_batched_v
 from lib.experimental_methods import get_clean_pulses_fn_v
 from lib.network import get_network_eval_v_fn
 
-from likelihood_mpe_padded_input import get_neg_c_triple_gamma_llh
+from likelihood_mpe_padded_input_clip_charge import get_neg_c_triple_gamma_llh
 from lib.geo import get_xyz_from_zenith_azimuth, __c
 from dom_track_eval import get_eval_network_doms_and_track as get_eval_network_doms_and_track
 import time
+import glob
 
 dtype = jnp.float32
 eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/network',
@@ -29,8 +30,12 @@ eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dt
 
 # Create padded batches (with different seq length).
 tfrecord = "/home/storage2/hans/i3files/21220/ftr/data_ds_21220_from_*_to_*_1st_pulse.tfrecord"
-#tfrecord = "/home/storage2/hans/i3files/21217/ftr/data_ds_21217_from_*_to_*_1st_pulse.tfrecord"
-batch_maker = I3SimBatchHandlerTFRecord(tfrecord, batch_size=8192)
+fs = glob.glob(tfrecord)
+tfrecord = "/home/storage2/hans/i3files/21217/ftr/data_ds_21217_from_*_to_*_1st_pulse.tfrecord"
+fs += glob.glob(tfrecord)
+
+batch_maker = I3SimBatchHandlerTFRecord(fs, batch_size=64)
+# Create padded batches (with different seq length).
 batch_iter = batch_maker.get_batch_iterator()
 
 # Until LLH has a noise-term, we need to remove crazy early noise pulses
@@ -93,6 +98,7 @@ def reconstruct_one_batch(data, mctruth):
 n_batches = 50
 
 results = []
+results = []
 for i in range(n_batches):
     try:
         data, mctruth = batch_iter.next() # [Nev, Ndom, Nobs], [Nev, Naux]
@@ -100,11 +106,14 @@ for i in range(n_batches):
         data = jnp.array(data.numpy())
         mctruth = jnp.array(mctruth.numpy())
         tic = time.time()
-        result_x, delta_logl = reconstruct_one_batch(data, mctruth)
+        jax.jit(reconstruct_one_batch).lower(data, mctruth).compile()
         toc = time.time()
+        print(f"jit compilation took {toc-tic:.1f}s.")
+        result_x, delta_logl = reconstruct_one_batch(data, mctruth)
+        tac = time.time()
         y = jnp.column_stack([mctruth, result_x, delta_logl])
         results.append(y)
-        print(f"took {toc-tic:.1f}s.")
+        print(f"actual computation took {tac-toc:.1f}s.")
 
     except Exception as e:
         print(e)
@@ -113,6 +122,6 @@ for i in range(n_batches):
 
 # store results.
 results = jnp.concatenate(results)
-np.save("reco_result_21220_tfrecord_altrho2_1st_pulse_MPE_tsigma_2.0_clip_charge.npy", results)
-#np.save("reco_result_21217_tfrecord_altrho2_1st_pulse_MPE_tsigma_2.0_clip_charge.npy", results)
+np.save("reco_result_21217_21220_sigma_3.0_MPE_clipcharge_30_cgamma_c_multi_gamma_prob_and_sf.npy", results)
+
 

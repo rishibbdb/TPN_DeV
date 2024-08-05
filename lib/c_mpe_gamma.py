@@ -14,6 +14,9 @@ tfd = tfp.distributions
 from quadax import quadgk as quad
 
 def c_multi_gamma_mpe_prob(x, logits, a, b, n, sigma):
+    '''
+    too slow due to gamma_sf / gammainc calls.
+    '''
     g_pdf = tfd.MixtureSameFamily(
                   mixture_distribution=tfd.Categorical(
                       logits=logits
@@ -51,15 +54,29 @@ c_multi_gamma_mpe_prob_v = jax.vmap(c_multi_gamma_mpe_prob, (0, 0, 0, 0, 0, None
 
 
 def c_multi_gamma_mpe_prob_pure_jax(x, mix_probs, a, b, n, sigma=3.0):
-    nmax = 15
-    nint = 101
+    '''
+    too slow due to gamma_sf / gammainc calls.
+    '''
+    nmax = 10
+    nint1 = 10
+    nint2 = 15
+    nint3 = 35
     eps = 1.e-6
 
     xmax = jnp.max(jnp.array([jnp.array(nmax * sigma), x + nmax * sigma]))
     diff = xmax-x
     xmin = jnp.max(jnp.array([jnp.array(0.0), x - diff]))
+    x_m1 = xmin + 0.02*sigma
+    x_m2 = x_m1 + 0.5*sigma
 
-    xvals = jnp.linspace(xmin+eps, xmax, nint)
+    # two combined the two integration regions
+    xvals = jnp.concatenate([jnp.linspace(xmin, x_m1, nint1),
+                             jnp.linspace(x_m1, x_m2, nint2),
+                             jnp.linspace(x_m2, xmax, nint3)])
+
+    dx = xvals[1:]-xvals[:-1]
+
+    xvals = 0.5*(xvals[:-1]+xvals[1:])
     n_pdf = norm_pdf(0.5*(xvals[:-1]+xvals[1:]), loc=x, scale=sigma)
 
     a_e = jnp.expand_dims(a, axis=-1)
@@ -75,6 +92,9 @@ c_multi_gamma_mpe_prob_pure_jax_v = jax.vmap(c_multi_gamma_mpe_prob_pure_jax, (0
 
 
 def c_multi_gamma_mpe_prob_pure_jax_fast(x, mix_probs, a, b, n, sigma=3.0):
+    """
+    too heavy tail towards early times at large distances.
+    """
     nmax = 15
     nint = 101
     eps = 1.e-6
@@ -138,10 +158,13 @@ c_multi_gamma_mpe_prob_pure_jax_fast_qdx_v = jax.vmap(c_multi_gamma_mpe_prob_pur
 
 
 def c_multi_gamma_mpe_prob_midpoint(x, mix_probs, a, b, n, sigma=3.0):
+    """
+    Q < 30
+    """
     nmax = 10
-    nint1 = 5
+    nint1 = 10
     nint2 = 15
-    nint3 = 21
+    nint3 = 35
     eps = 1.e-6
 
     xmax = jnp.max(jnp.array([jnp.array(nmax * sigma), x + nmax * sigma]))

@@ -149,7 +149,9 @@ def c_gamma_sf(x, a, b, sigma=3.0):
     """
     #alpha = 2.5 # controls the split of the integral => precision.
     alpha = 2.5
-    n_steps = 40 # controls the support points in midpoint integration
+    n_steps1 = 30 # controls the support points in midpoint integration
+    n_steps2 = 10
+    n_steps3 = 10
     eps = 1.e-15
 
     sqrt2sigma2 = jnp.sqrt(2.0*sigma**2)
@@ -165,9 +167,19 @@ def c_gamma_sf(x, a, b, sigma=3.0):
     term1 = gammaincc(a, b*ymax) + gammaincc(a, b*ymin)
     term2 = jnp.power(b, a) # J in arXiv:astro-ph/0506136
 
-    x_int = jnp.linspace(ymin, ymax, n_steps+1, axis=-1)
+    #x_int = jnp.linspace(ymin, ymax, n_steps+1, axis=-1)
+    #dx = jnp.expand_dims(x_int[..., 1] - x_int[..., 0], axis=-1)
+
+    mid_p1 = ymin + 0.01 * (ymax - ymin)
+    mid_p2 = mid_p1 + 0.1 * (ymax - mid_p1)
+    x_int = jnp.concatenate([
+        jnp.linspace(ymin, mid_p1, n_steps2+1, axis=-1),
+        jnp.linspace(mid_p1, mid_p2, n_steps3+1, axis=-1),
+        jnp.linspace(mid_p2, ymax, n_steps1+1, axis=-1)
+    ])
+
+    dx = jnp.expand_dims(x_int[..., 1:] - x_int[..., :-1], axis=0)
     x_int = 0.5*(x_int[...,1:] + x_int[...,:-1])
-    dx = jnp.expand_dims(x_int[..., 1] - x_int[..., 0], axis=-1)
 
     # add dimension to end for proper broadcasting during integration
     # and then integrate by brute force on even grid
@@ -193,9 +205,12 @@ def c_gamma_sf_approx(x, a, b, sigma=3.0):
     following arXiv:astro-ph/0506136
 	but uses approximate functions for regularized incomplete gamma functions.
     experimental. do not use.
+	(certainly do not use for Q>30p.e.)
     """
     alpha = 2.5 # controls the split of the integral => precision.
-    n_steps = 40 # controls the support points in trapezoidal integration
+    n_steps1 = 30 # controls the support points in midpoint integration
+    n_steps2 = 10
+    n_steps3 = 10
     eps = 1.e-6
 
     sqrt2sigma2 = jnp.sqrt(2.0*sigma**2)
@@ -212,9 +227,20 @@ def c_gamma_sf_approx(x, a, b, sigma=3.0):
     term1 = gamma_sf_fast_w_existing_coefficients(ymax, a, b, c) + gamma_sf_fast_w_existing_coefficients(ymin, a, b, c)
     term2 = jnp.power(b, a) # J in arXiv:astro-ph/0506136
 
-    x_int = jnp.linspace(ymin, ymax, n_steps+1, axis=-1)
+    #x_int = jnp.linspace(ymin, ymax, n_steps+1, axis=-1)
+    #x_int = 0.5*(x_int[...,1:] + x_int[...,:-1])
+    #dx = jnp.expand_dims(x_int[..., 1] - x_int[..., 0], axis=-1)
+
+    mid_p1 = ymin + 0.01 * (ymax - ymin)
+    mid_p2 = mid_p1 + 0.1 * (ymax - mid_p1)
+    x_int = jnp.concatenate([
+        jnp.linspace(ymin, mid_p1, n_steps2+1, axis=-1),
+        jnp.linspace(mid_p1, mid_p2, n_steps3+1, axis=-1),
+        jnp.linspace(mid_p2, ymax, n_steps1+1, axis=-1)
+    ])
+
+    dx = jnp.expand_dims(x_int[..., 1:] - x_int[..., :-1], axis=0)
     x_int = 0.5*(x_int[...,1:] + x_int[...,:-1])
-    dx = jnp.expand_dims(x_int[..., 1] - x_int[..., 0], axis=-1)
 
     # add dimension to end for proper broadcasting during integration
     # and then integrate by brute force on even grid

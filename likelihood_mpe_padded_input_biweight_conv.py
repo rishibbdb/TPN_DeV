@@ -14,7 +14,7 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
                                event_data):
 
         # Constant parameters.
-        sigma = jnp.array(4.0) # width of gaussian convolution
+        sigma = jnp.array(3.0) # width of gaussian convolution
         X_safe = jnp.array(2.9) # when to stop evaluating negative time residuals in units of sigma
 
         dom_pos = event_data[:, :3]
