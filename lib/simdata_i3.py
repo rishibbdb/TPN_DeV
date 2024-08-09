@@ -121,7 +121,8 @@ class I3SimBatchHandlerFtr:
         meta_data_tf = tf.constant(meta_data, dtype=tf.float64)
 
         # TF's batch by sequence length magic
-        n_bins = 12
+        #n_bins = 25
+        n_bins = 1
         ds = tf.data.Dataset.from_tensor_slices((pulse_data_tf, meta_data_tf))
         ds = ds.map(lambda x, y: (x, y))
         _element_length_funct = lambda x, y: tf.shape(x)[0]
@@ -130,7 +131,8 @@ class I3SimBatchHandlerFtr:
                     bucket_boundaries = np.logspace(1, np.log10(n_doms_max), n_bins+1).astype(int).tolist(),
                     bucket_batch_sizes = [self.batch_size]*(n_bins+2),
                     drop_remainder = False,
-                    pad_to_bucket_boundary=True
+                    pad_to_bucket_boundary=False
+                    # pad_to_bucket_boundary=True
                 )
 
         self.tf_dataset = ds
@@ -194,7 +196,8 @@ def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14):
     #    )
 
     n_doms_max = 5170
-    n_bins = 25
+    n_bins = 20
+    #n_bins = 10
     edges = np.logspace(0.5, np.log10(n_doms_max), n_bins+1).astype(int)
     factor = np.median(edges[1:] / edges[:-1])
     scale = np.power(factor, np.arange(n_bins+2)[::-1])

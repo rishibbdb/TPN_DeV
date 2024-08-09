@@ -3,7 +3,7 @@ import jax
 import numpy as np
 
 from jax.scipy.special import gammaincc, erf
-from lib.gamma_sf_approx import gamma_sf_fast_w_existing_coefficients, c_coeffs
+from jax.scipy.stats.norm import pdf as norm_pdf
 
 _M_LN2 = jnp.log(2.0)
 _M_SQRTPI = jnp.sqrt(np.pi)
@@ -147,8 +147,7 @@ def c_gamma_sf(x, a, b, sigma=3.0):
     """
     following arXiv:astro-ph/0506136
     """
-    #alpha = 2.5 # controls the split of the integral => precision.
-    alpha = 2.5
+    alpha = 2.5 # controls the split of the integral => precision.
     n_steps1 = 30 # controls the support points in midpoint integration
     n_steps2 = 10
     n_steps3 = 10
@@ -200,65 +199,32 @@ def c_multi_gamma_sf(x, mix_probs, a, b, sigma=3.0):
 c_multi_gamma_sf_v = jax.jit(jax.vmap(c_multi_gamma_sf, (0, 0, 0, 0, None), 0))
 
 
-def c_gamma_sf_approx(x, a, b, sigma=3.0):
-    """
-    following arXiv:astro-ph/0506136
-	but uses approximate functions for regularized incomplete gamma functions.
-    experimental. do not use.
-	(certainly do not use for Q>30p.e.)
-    """
-    alpha = 2.5 # controls the split of the integral => precision.
-    n_steps1 = 30 # controls the support points in midpoint integration
-    n_steps2 = 10
-    n_steps3 = 10
-    eps = 1.e-6
+def c_multi_gamma_mpe_prob(x, mix_probs, a, b, n, sigma=3.0, delta=10.0):
+    p = c_multi_gamma_prob(x, mix_probs, a, b, sigma=sigma, delta=delta)
+    sf = c_multi_gamma_sf(x, mix_probs, a, b, sigma=sigma)
+    return n * p * jnp.power(sf, n-1)
 
-    sqrt2sigma2 = jnp.sqrt(2.0*sigma**2)
-
-    ymin = x - alpha*sqrt2sigma2 # start of numeric integration
-    ymin = jnp.where(ymin >= 0.0, ymin, 0.0)
-
-    ymax = x + alpha*sqrt2sigma2 # end of numeric integration
-    ymax = jnp.where(ymax >= 0.0, ymax, 0.0)
-    # todo: think about special case when ymin = ymax = 0.0
-    # based on testing so far: no need to do anything.
-
-    c = c_coeffs(a)
-    term1 = gamma_sf_fast_w_existing_coefficients(ymax, a, b, c) + gamma_sf_fast_w_existing_coefficients(ymin, a, b, c)
-    term2 = jnp.power(b, a) # J in arXiv:astro-ph/0506136
-
-    #x_int = jnp.linspace(ymin, ymax, n_steps+1, axis=-1)
-    #x_int = 0.5*(x_int[...,1:] + x_int[...,:-1])
-    #dx = jnp.expand_dims(x_int[..., 1] - x_int[..., 0], axis=-1)
-
-    mid_p1 = ymin + 0.01 * (ymax - ymin)
-    mid_p2 = mid_p1 + 0.1 * (ymax - mid_p1)
-    x_int = jnp.concatenate([
-        jnp.linspace(ymin, mid_p1, n_steps2+1, axis=-1),
-        jnp.linspace(mid_p1, mid_p2, n_steps3+1, axis=-1),
-        jnp.linspace(mid_p2, ymax, n_steps1+1, axis=-1)
-    ])
-
-    dx = jnp.expand_dims(x_int[..., 1:] - x_int[..., :-1], axis=0)
-    x_int = 0.5*(x_int[...,1:] + x_int[...,:-1])
-
-    # add dimension to end for proper broadcasting during integration
-    # and then integrate by brute force on even grid
-    # todo: come up with something faster and more accurate?
-    a_e = jnp.expand_dims(a, axis=-1)
-    b_e = jnp.expand_dims(b, axis=-1)
-    y_int = jnp.power(x_int, a_e-1) * jnp.exp(-b_e*x_int) * erf((x-x_int)/sqrt2sigma2)
-    term2 *= jnp.sum(y_int * dx, axis=-1)
-
-    sf = 0.5 * (term1 - term2/jax.scipy.special.gamma(a))
-    return jnp.clip(sf, min=eps, max=1.0)
+c_multi_gamma_mpe_prob_v1d_x = jax.jit(jax.vmap(c_multi_gamma_mpe_prob, (0, None, None, None, None, None, None), 0))
 
 
-def c_multi_gamma_sf_approx(x, mix_probs, a, b, sigma=3.0):
-    """
-    experimental. do not use.
-    """
-    probs = c_gamma_sf_approx(x, a, b, sigma=sigma)
-    return jnp.sum(mix_probs * probs, axis=-1)
+def c_multi_gamma_mpe_log_prob(x, mix_probs, a, b, n, sigma=3.0, delta=10.0):
+    p = c_multi_gamma_prob(x, mix_probs, a, b, sigma=sigma, delta=delta)
+    sf = c_multi_gamma_sf(x, mix_probs, a, b, sigma=sigma)
+    return jnp.log(n) + jnp.log(p) + (n-1) * jnp.log(sf)
 
-c_multi_gamma_sf_approx_v = jax.jit(jax.vmap(c_multi_gamma_sf_approx, (0, 0, 0, 0, None), 0))
+
+def postjitter_c_multi_gamma_mpe_prob(x, mix_probs, a, b, n, sigma=3.0, sigma_post=2.0):
+    nmax = 5.0
+    nint = 10
+    nint2 = 10
+    x0 = -12.0 # early integration start
+    x1 = -2.0 # early integration end
+    delta = 1.0
+    xmin = x - nmax * sigma_post
+    xmax = x + nmax * sigma_post
+    xvals = jnp.concatenate([jnp.linspace(x0, x1, nint2), jnp.linspace(xmin, xmax, nint)])
+    xvals = jnp.sort(xvals)
+    dx = xvals[1:] - xvals[:-1]
+    xvals = 0.5*(xvals[:-1]+xvals[1:])
+    return jnp.sum(norm_pdf(xvals, loc=x, scale=sigma_post) * c_multi_gamma_mpe_prob_v1d_x(xvals, mix_probs, a, b, n, sigma, delta) * dx)
+

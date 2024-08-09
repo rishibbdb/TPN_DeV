@@ -39,18 +39,26 @@ c_multi_gamma_biweight_mpe_logprob_v1d = jax.jit(jax.vmap(c_multi_gamma_biweight
 
 
 def postjitter_c_mpe_biweight(x, mix_probs, a, b, n, sigma=3.0, sigma_post=2.0):
-    nmax = 6.0
-    nint1 = 4
-    nint2 = 8
+    nmax = 5.0
+    nint1 = 10
+    nint2 = 10
     eps = 1.e-6
     x0 = -sigma * __sigma_scale # start of support of MPE convolved biweight
 
     xmax = jnp.max(jnp.array([x0 + jnp.array(nmax * sigma_post), x + nmax * sigma_post]))
     diff = xmax-x
     xmin = jnp.max(jnp.array([jnp.array(x0)+eps, x - diff]))
-
+    xmin = jnp.max(jnp.array([jnp.array(x0), x - diff]))
     mid_p = xmin + 0.2 * (xmax-xmin)
     xvals = jnp.concatenate([jnp.linspace(xmin, mid_p, nint1), jnp.linspace(mid_p, xmax, nint2)])
+
+    #xmax = jnp.max(jnp.array([nmax * sigma_post, x + nmax * sigma_post]))
+    #diff = xmax-x
+    #xmin = jnp.max(jnp.array([jnp.array(x0)+eps, x - diff]))
+    #xvals0 = jnp.linspace(jnp.array(x0)+eps, -7.0, 5)
+    #xvals1 = jnp.linspace(-7.0, 0.0, 7)
+    #xvals2 = jnp.linspace(jnp.max(jnp.array([0.0, xmin])), xmax, 10)
+    #xvals = jnp.sort(jnp.concatenate([xvals0, xvals1, xvals2]))
 
     dx = xvals[1:] - xvals[:-1]
     xvals = 0.5*(xvals[:-1]+xvals[1:])
