@@ -90,7 +90,7 @@ def get_eval_network_doms_and_track_w_charge(eval_network_v_fn, eval_charge_netw
         y_pred = eval_network_v_fn(x_prime)
         logits, av, bv = transform_network_outputs_v(y_pred)
 
-		predicted_charge = eval_charge_network_v_fn(x_prime)
+        predicted_charge = eval_charge_network_v_fn(x_prime)
 
         # Cast to float64. Likelihoods need double precision.
         logits = jnp.array(logits, dtype=jnp.float64)
