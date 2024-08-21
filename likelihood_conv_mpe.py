@@ -47,13 +47,14 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
         #            n_photons,
         #            sigma)
 
-        #mix_probs = jax.nn.softmax(logits)
-        #probs = c_multi_gamma_mpe_prob_pure_jax_fast_v(safe_delay_time,
-        #            mix_probs,
-        #            av,
-        #            bv,
-        #            n_photons,
-        #            sigma)
+        # works well for event 0
+        mix_probs = jax.nn.softmax(logits)
+        probs = c_multi_gamma_mpe_prob_pure_jax_fast_v(safe_delay_time,
+                    mix_probs,
+                    av,
+                    bv,
+                    n_photons,
+                    sigma)
 
         #mix_probs = jax.nn.softmax(logits)
         #probs = c_multi_gamma_mpe_prob_pure_jax_fast_qdx_v(safe_delay_time,
@@ -63,13 +64,13 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
         #            n_photons,
         #            sigma)
 
-        mix_probs = jax.nn.softmax(logits)
-        probs = c_multi_gamma_mpe_prob_midpoint_v(safe_delay_time,
-                    mix_probs,
-                    av,
-                    bv,
-                    n_photons,
-                    sigma)
+        #mix_probs = jax.nn.softmax(logits)
+        #probs = c_multi_gamma_mpe_prob_midpoint_v(safe_delay_time,
+        #            mix_probs,
+        #            av,
+        #            bv,
+        #            n_photons,
+        #            sigma)
 
         return -2.0 * jnp.sum(jnp.log(probs))
 

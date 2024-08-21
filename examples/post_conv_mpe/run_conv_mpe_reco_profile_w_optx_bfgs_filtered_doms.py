@@ -19,9 +19,10 @@ import matplotlib.pyplot as plt
 from lib.simdata_i3 import I3SimHandler
 from lib.geo import center_track_pos_and_time_based_on_data
 from lib.network import get_network_eval_v_fn
-from lib.experimental_methods import remove_early_pulses
-#from dom_track_eval import get_eval_network_doms_and_track2 as get_eval_network_doms_and_track
-from dom_track_eval import get_eval_network_doms_and_track as get_eval_network_doms_and_track
+from lib.charge_network import get_charge_network_eval_v_fn
+from lib.experimental_methods import remove_early_pulses, remove_early_pulses_and_noise_candidate_doms
+from dom_track_eval import get_eval_network_doms_and_track, get_eval_network_doms_and_track_w_charge
+
 from likelihood_conv_mpe import get_neg_c_triple_gamma_llh
 
 from palettable.cubehelix import Cubehelix
@@ -29,6 +30,7 @@ cx =Cubehelix.make(start=0.3, rotation=-0.5, n=16, reverse=False, gamma=1.0,
                            max_light=1.0,max_sat=0.5, min_sat=1.4).get_mpl_colormap()
 
 import time
+from collections.abc import Callable
 
 # Number of scan points on 1D
 n_eval = 50 # making it a 20x20 grid
@@ -42,7 +44,10 @@ event_index = int(sys.argv[1])
 
 # Get network and eval logic.
 eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco_new/data/network', dtype=jnp.float32)
+eval_charge_network_v = get_charge_network_eval_v_fn(bpath='/home/storage/hans/jax_reco_new/data/charge_network', dtype=jnp.float32)
+
 eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=jnp.float32)
+eval_network_doms_and_track_w_charge = get_eval_network_doms_and_track_w_charge(eval_network_v, eval_charge_network_v, dtype=jnp.float32)
 
 # Get an IceCube event.
 bp = '/home/storage2/hans/i3files/21217'
@@ -78,7 +83,8 @@ print("shifted seed vertex:", centered_track_pos)
 # Combine into single data tensor for fitting.
 fitting_event_data_unclean = jnp.array(event_data[['x', 'y', 'z', 'time', 'charge']].to_numpy())
 print(fitting_event_data_unclean.shape)
-fitting_event_data = remove_early_pulses(eval_network_doms_and_track,
+#fitting_event_data = fitting_event_data_unclean
+fitting_event_data = remove_early_pulses_and_noise_candidate_doms(eval_network_doms_and_track_w_charge,
                                         fitting_event_data_unclean,
                                         centered_track_pos,
                                         track_src,
@@ -110,16 +116,23 @@ def neg_llh_5D(x, args):
         return neg_llh(projected_dir, x[2:]*scale, centered_track_time, fitting_event_data)
 
 solver = optx.BFGS(rtol=1e-7, atol=1e-3, use_inverse=True)
+#class HybridSolver(optx.AbstractBFGS):
+#    rtol: float
+#    atol: float
+#    norm: Callable
+#    use_inverse: bool = True
+#    descent: optx.AbstractDescent = optx.NewtonDescent()
+#    search: optx.AbstractSearch = optx.BacktrackingArmijo(step_init=1.0, decrease_factor=0.9, slope=0.1)
+#
+#solver = HybridSolver(rtol=1e-7, atol=1e-3, norm=optx.max_norm)
 x0 = jnp.concatenate([track_src*scale_rad, centered_track_pos/scale])
 best_x = optx.minimise(neg_llh_5D, solver, x0).value
 best_logl = neg_llh_5D(best_x, None)
 
-print(jnp.rad2deg(best_x[:2]/scale_rad))
-
 print("best fit done. starting scan.")
 print(best_logl)
 #x0 = centered_track_pos/scale
-#x0 = best_x[2:]
+x0 = best_x[2:]
 
 @jax.jit
 def neg_llh_3D(x, track_dir):
@@ -177,4 +190,4 @@ ct = plt.contour(np.rad2deg(X), np.rad2deg(Y), delta_logl, levels=contours, line
 
 plt.legend()
 plt.tight_layout()
-plt.savefig(f"mpe_scan_ev_{event_index}.png", dpi=300)
+plt.savefig(f"mpe_scan_ev_{event_index}_filtered.png", dpi=300)

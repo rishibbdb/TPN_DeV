@@ -2,7 +2,7 @@
 
 import sys, os
 sys.path.insert(0, "/home/storage/hans/jax_reco_new/")
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 from tensorflow_probability.substrates import jax as tfp
 
@@ -85,12 +85,13 @@ neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
 print(neg_llh(track_src, centered_track_pos, centered_track_time, fitting_event_data))
 centered_track_time = centered_track_time - 5
 
-scale = 20.0
+scale = 3.0
+scale_rad = 50.0
 @jax.jit
 def neg_llh_5D(x, args):
 		# project back if outside of [0, pi] x [0, 2*pi]
-        zenith = x[0] / scale
-        azimuth = x[1] / scale
+        zenith = x[0] / scale_rad
+        azimuth = x[1] / scale_rad
         zenith = jnp.fmod(zenith, 2.0*jnp.pi)
         zenith = jnp.where(zenith < 0, zenith+2.0*jnp.pi, zenith)
         cond = zenith > jnp.pi
@@ -104,14 +105,14 @@ def neg_llh_5D(x, args):
         return neg_llh(projected_dir, x[2:]*scale, centered_track_time, fitting_event_data)
 
 solver = optx.BFGS(rtol=1e-7, atol=1e-3, use_inverse=True)
-x0 = jnp.concatenate([track_src*scale, centered_track_pos/scale])
+x0 = jnp.concatenate([track_src*scale_rad, centered_track_pos/scale])
 best_x = optx.minimise(neg_llh_5D, solver, x0, throw=False).value
 best_logl = neg_llh_5D(best_x, None)
 
 print("best fit done. starting scan.")
 print(best_logl)
-#x0 = centered_track_pos/scale
-x0 = best_x[2:]
+x0 = centered_track_pos/scale
+#x0 = best_x[2:]
 
 @jax.jit
 def neg_llh_3D(x, track_dir):
@@ -158,8 +159,8 @@ smpe_zenith = meta['spline_mpe_zenith']
 smpe_azimuth = meta['spline_mpe_azimuth']
 ax.scatter(np.rad2deg([smpe_zenith]), np.rad2deg([smpe_azimuth]), marker="x", color='lime', label='splineMPE')
 
-zenith = best_x[0] / scale
-azimuth = best_x[1] / scale
+zenith = best_x[0] / scale_rad
+azimuth = best_x[1] / scale_rad
 ax.scatter(np.rad2deg(zenith), np.rad2deg(azimuth), marker='+', color='magenta', label='bfgs')
 
 contours = [4.61]
