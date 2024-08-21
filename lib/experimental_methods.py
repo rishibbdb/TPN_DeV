@@ -2,10 +2,29 @@ import jax
 import jax.numpy as jnp
 
 def remove_early_pulses(eval_network_doms_and_track, data, track_pos, track_dir, track_time):
-    crit = -10.0
+    crit = -50.0 # ns
     _, _, _, geo_times = eval_network_doms_and_track(data[:,:3], track_pos, track_dir)
     delay_times = data[:, 3] - geo_times - track_time
     idx = delay_times > crit
+    filtered_data = data[idx]
+    return filtered_data
+
+
+def remove_early_pulses_and_noise_candidate_doms(eval_network_doms_and_track, data, track_pos, track_dir, track_time):
+    crit_time = -50 # ns
+    crit_charge = 0.05 # pe
+    _, _, _, geo_times, predicted_charge = eval_network_doms_and_track(data[:,:3], track_pos, track_dir)
+
+    # filter early pulses
+    delay_times = data[:, 3] - geo_times - track_time
+    idx_time = delay_times > crit_time
+
+    # filter predicted low charger doms
+    charges = data[:, 4]
+    predicted_charge = jnp.squeeze(jnp.sum(charges) / jnp.sum(predicted_charge) * predicted_charge)
+    idx_charge = predicted_charge > crit_charge
+
+    idx = jnp.logical_and(idx_time, idx_charge)
     filtered_data = data[idx]
     return filtered_data
 
@@ -17,8 +36,7 @@ def get_clean_pulses_fn(eval_network_doms_and_track_fn, n_pulses=1):
         track_time = mctruth[4]
         track_pos = mctruth[5:8]
 
-        #crit = -10.0
-        crit = -20.0
+        crit = -50.0 # ns
         #_, _, _, geo_times, _ = eval_network_doms_and_track_fn(data[:,:3], track_pos, track_src)
         _, _, _, geo_times = eval_network_doms_and_track_fn(data[:,:3], track_pos, track_src)
         delay_times = data[:, 3] - geo_times - track_time
