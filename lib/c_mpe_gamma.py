@@ -241,7 +241,8 @@ def c_multi_gamma_mpe_prob_midpoint2(x, mix_probs, a, b, n, sigma=3.0):
     nint1 = 10
     nint2 = 15
     nint3 = 35
-    eps = 1.e-12
+    #eps = 1.e-12
+    eps = 1.e-6
 
     #xmax = jnp.max(jnp.array([jnp.array(nmax * sigma), x + nmax * sigma]))
     #diff = xmax-x
@@ -273,14 +274,17 @@ def c_multi_gamma_mpe_prob_midpoint2(x, mix_probs, a, b, n, sigma=3.0):
     x_m4 = 8.0
     xvals4 = jnp.linspace(x_m3, x_m4, 20)
 
-    x_m5 = 6000.0
-    xvals5 = jnp.linspace(x_m4, x_m5, 20)
+    #x_m5 = 6000.0
+    #xvals5 = jnp.linspace(x_m4, x_m5, 20)
 
-
-    xmin = jnp.max(jnp.array([1.5 * eps, x - 4 * sigma]))
-    xmax = jnp.max(jnp.array([xmin+1.5*eps, x + 4 * sigma]))
-    xvals_x = jnp.linspace(xmin, xmax, 30)
-    xvals = jnp.sort(jnp.concatenate([xvals0, xvals1, xvals2, xvals25, xvals3, xvals4, xvals5, xvals_x]))
+    #xmin = jnp.max(jnp.array([1.5 * eps, x - 4 * sigma]))
+    #xmax = jnp.max(jnp.array([xmin+1.5*eps, x + 4 * sigma]))
+    #xvals_x = jnp.linspace(xmin, xmax, 30)
+    #xvals = jnp.sort(jnp.concatenate([xvals0, xvals1, xvals2, xvals25, xvals3, xvals4, xvals5, xvals_x]))
+    xmin = jnp.max(jnp.array([1.5 * eps, x - 10 * sigma]))
+    xmax = jnp.max(jnp.array([xmin+1.5*eps, x + 10 * sigma]))
+    xvals_x = jnp.linspace(xmin, xmax, 101)
+    xvals = jnp.sort(jnp.concatenate([xvals0, xvals1, xvals2, xvals25, xvals3, xvals4, xvals_x]))
 
     dx = xvals[1:]-xvals[:-1]
 

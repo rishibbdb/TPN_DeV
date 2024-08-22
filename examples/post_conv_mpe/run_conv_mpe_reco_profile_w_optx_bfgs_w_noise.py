@@ -19,9 +19,8 @@ import matplotlib.pyplot as plt
 from lib.simdata_i3 import I3SimHandler
 from lib.geo import center_track_pos_and_time_based_on_data
 from lib.network import get_network_eval_v_fn
-from lib.charge_network import get_charge_network_eval_v_fn
-from dom_track_eval import get_eval_network_doms_and_track_w_charge as get_eval_network_doms_and_track
-from likelihood_conv_mpe_w_weighted_noise import get_neg_c_triple_gamma_llh
+from dom_track_eval import get_eval_network_doms_and_track as get_eval_network_doms_and_track
+from likelihood_conv_mpe_w_noise import get_neg_c_triple_gamma_llh
 
 from palettable.cubehelix import Cubehelix
 cx =Cubehelix.make(start=0.3, rotation=-0.5, n=16, reverse=False, gamma=1.0,
@@ -41,9 +40,7 @@ event_index = int(sys.argv[1])
 
 # Get network and eval logic.
 eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco_new/data/network', dtype=jnp.float32)
-eval_charge_network_v = get_charge_network_eval_v_fn(bpath='/home/storage/hans/jax_reco_new/data/charge_network', dtype=jnp.float32)
-
-eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, eval_charge_network_v, dtype=jnp.float32)
+eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=jnp.float32)
 
 # Get an IceCube event.
 bp = '/home/storage2/hans/i3files/21217'
@@ -76,7 +73,7 @@ centered_track_pos, centered_track_time = center_track_pos_and_time_based_on_dat
 print("shifted seed vertex:", centered_track_pos)
 
 
-# Clip charge and combine into single data tensor for fitting.
+# Combine into single data tensor for fitting.
 fitting_event_data = jnp.array(event_data[['x', 'y', 'z', 'time', 'charge']].to_numpy())
 print(fitting_event_data.shape)
 
@@ -85,13 +82,12 @@ neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
 print(neg_llh(track_src, centered_track_pos, centered_track_time, fitting_event_data))
 centered_track_time = centered_track_time - 5
 
-scale = 3.0
-scale_rad = 100.0
+scale = 20.0
 @jax.jit
 def neg_llh_5D(x, args):
 		# project back if outside of [0, pi] x [0, 2*pi]
-        zenith = x[0] / scale_rad
-        azimuth = x[1] / scale_rad
+        zenith = x[0] / scale
+        azimuth = x[1] / scale
         zenith = jnp.fmod(zenith, 2.0*jnp.pi)
         zenith = jnp.where(zenith < 0, zenith+2.0*jnp.pi, zenith)
         cond = zenith > jnp.pi
@@ -105,13 +101,13 @@ def neg_llh_5D(x, args):
         return neg_llh(projected_dir, x[2:]*scale, centered_track_time, fitting_event_data)
 
 solver = optx.BFGS(rtol=1e-7, atol=1e-3, use_inverse=True)
-x0 = jnp.concatenate([track_src*scale_rad, centered_track_pos/scale])
-best_x = optx.minimise(neg_llh_5D, solver, x0, throw=False).value
+x0 = jnp.concatenate([track_src*scale, centered_track_pos/scale])
+best_x = optx.minimise(neg_llh_5D, solver, x0).value
 best_logl = neg_llh_5D(best_x, None)
 
 print("best fit done. starting scan.")
 print(best_logl)
-x0 = centered_track_pos/scale
+#x0 = centered_track_pos/scale
 #x0 = best_x[2:]
 
 @jax.jit
@@ -159,8 +155,8 @@ smpe_zenith = meta['spline_mpe_zenith']
 smpe_azimuth = meta['spline_mpe_azimuth']
 ax.scatter(np.rad2deg([smpe_zenith]), np.rad2deg([smpe_azimuth]), marker="x", color='lime', label='splineMPE')
 
-zenith = best_x[0] / scale_rad
-azimuth = best_x[1] / scale_rad
+zenith = best_x[0] / scale
+azimuth = best_x[1] / scale
 ax.scatter(np.rad2deg(zenith), np.rad2deg(azimuth), marker='+', color='magenta', label='bfgs')
 
 contours = [4.61]
@@ -170,4 +166,4 @@ ct = plt.contour(np.rad2deg(X), np.rad2deg(Y), delta_logl, levels=contours, line
 
 plt.legend()
 plt.tight_layout()
-plt.savefig(f"mpe_scan_ev_{event_index}_w_weighted_noise.png", dpi=300)
+plt.savefig(f"mpe_scan_ev_{event_index}_w_noise.png", dpi=300)

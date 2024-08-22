@@ -33,8 +33,8 @@ import time
 n_eval = 50 # making it a 20x20 grid
 
 # Scan range (truth +/- dzen, +/- dazi)
-dzen = 0.05 # rad
-dazi = 0.05 # rad
+dzen = 0.01 # rad
+dazi = 0.01 # rad
 
 # Event Index.
 event_index = int(sys.argv[1])
@@ -46,14 +46,12 @@ eval_charge_network_v = get_charge_network_eval_v_fn(bpath='/home/storage/hans/j
 eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, eval_charge_network_v, dtype=jnp.float32)
 
 # Get an IceCube event.
-bp = '/home/storage2/hans/i3files/21217'
+bp = '/home/storage2/hans/i3files/alerts/bfrv2/'
 
-#sim_handler = I3SimHandler(os.path.join(bp, 'meta_ds_21217_from_10000_to_20000_1_to_10TeV.ftr'),
-#                              os.path.join(bp, 'pulses_ds_21217_from_10000_to_20000_1_to_10TeV.ftr'),
-#                              '/home/storage/hans/jax_reco_new/data/icecube/detector_geometry.csv')
-
-sim_handler = I3SimHandler(os.path.join(bp, 'meta_ds_21217_from_35000_to_53530.ftr'),
-                              os.path.join(bp, 'pulses_ds_21217_from_35000_to_53530.ftr'),
+#event_id = 10644
+event_id = 11086
+sim_handler = I3SimHandler(os.path.join(bp, f'meta_ds_event_{event_id}_N100_from_0_to_100_1st_pulse.ftr'),
+                              os.path.join(bp, f'pulses_ds_event_{event_id}_N100_from_0_to_100_1st_pulse.ftr'),
                               '/home/storage/hans/jax_reco_new/data/icecube/detector_geometry.csv')
 
 meta, pulses = sim_handler.get_event_data(event_index)
@@ -131,11 +129,28 @@ X, Y = jnp.meshgrid(zenith, azimuth)
 init_dirs = jnp.column_stack([X.flatten(), Y.flatten()])
 
 tic = time.time()
-logls = run_3D_v(init_dirs)
-toc = time.time()
-print(f"jit + reco of grid took {toc-tic:.1f}s.")
+#logls = run_3D_v(init_dirs)
 
+logls = []
+
+n_splits = 5
+n_per_split = len(init_dirs) // n_splits
+
+tic0 = time.time()
+for i in range(n_splits):
+    tic = time.time()
+    logls_ = run_3D_v(init_dirs[i*n_per_split: (i+1) * n_per_split, :])
+    toc = time.time()
+    logls.append(logls_)
+    print(f"jit + reco of partial grid took {toc-tic:.1f}s.")
+
+toc0 = time.time()
+print(f"jit + reco of grid took {toc0-tic0:.1f}s.")
+logls = jnp.concatenate(logls, axis=0)
 logls = logls.reshape(X.shape)
+
+
+
 
 fig, ax = plt.subplots()
 min_logl = np.amin(logls)
@@ -170,4 +185,4 @@ ct = plt.contour(np.rad2deg(X), np.rad2deg(Y), delta_logl, levels=contours, line
 
 plt.legend()
 plt.tight_layout()
-plt.savefig(f"mpe_scan_ev_{event_index}_w_weighted_noise.png", dpi=300)
+plt.savefig(f"mpe_scan_ev_{event_id}_{event_index}_w_weighted_noise.png", dpi=300)
