@@ -1,5 +1,6 @@
-from lib.c_mpe_gamma import c_multi_gamma_mpe_prob_midpoint2_v as c_multi_gamma_mpe_prob_midpoint_v
+#from lib.c_mpe_gamma import c_multi_gamma_mpe_prob_midpoint2_v as c_multi_gamma_mpe_prob_midpoint_v
 #from lib.c_mpe_gamma import c_multi_gamma_mpe_prob_pure_jax_fast_v as c_multi_gamma_mpe_prob_midpoint_v
+from lib.c_mpe_gamma import c_multi_gamma_mpe_prob_combined_v as c_multi_gamma_mpe_prob_midpoint_v
 from lib.c_spe_gamma import c_multi_gamma_spe_prob_large_sigma_v
 import jax
 import jax.numpy as jnp

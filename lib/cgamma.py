@@ -215,16 +215,21 @@ def c_multi_gamma_mpe_log_prob(x, mix_probs, a, b, n, sigma=3.0, delta=10.0):
 
 def postjitter_c_multi_gamma_mpe_prob(x, mix_probs, a, b, n, sigma=3.0, sigma_post=2.0):
     nmax = 5.0
-    nint = 10
+    nmin = 10.0
+    nint1 = 10
     nint2 = 10
-    x0 = -12.0 # early integration start
-    x1 = -2.0 # early integration end
+    x0 = -14.0 # early integration start
+    x1 = -1.0 # early integration end
     delta = 1.0
-    xmin = x - nmax * sigma_post
-    xmax = x + nmax * sigma_post
-    xvals = jnp.concatenate([jnp.linspace(x0, x1, nint2), jnp.linspace(xmin, xmax, nint)])
+
+
+    xmin = jnp.max(jnp.array([x0, x - nmin * sigma_post]))
+    xmax = jnp.max(jnp.array([x0 + nmax * sigma_post, x + nmax * sigma_post]))
+
+    xvals = jnp.concatenate([jnp.linspace(x0, x1, nint1), x * jnp.ones(1), jnp.linspace(xmin, xmax, nint2)])
     xvals = jnp.sort(xvals)
     dx = xvals[1:] - xvals[:-1]
     xvals = 0.5*(xvals[:-1]+xvals[1:])
     return jnp.sum(norm_pdf(xvals, loc=x, scale=sigma_post) * c_multi_gamma_mpe_prob_v1d_x(xvals, mix_probs, a, b, n, sigma, delta) * dx)
 
+postjitter_c_multi_gamma_mpe_prob_v = jax.jit(jax.vmap(postjitter_c_multi_gamma_mpe_prob, (0, 0, 0, 0, 0, None, None), 0))

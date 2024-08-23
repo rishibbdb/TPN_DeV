@@ -10,8 +10,10 @@ import jax
 from jax.scipy.special import gamma, gammaincc, gammainc
 from jax.scipy.stats.norm import pdf as norm_pdf
 
-__sigma_scale = 3.0
+from tensorflow_probability.substrates import jax as tfp
+tfd = tfp.distributions
 
+__sigma_scale = 3.0
 
 def c_multi_gamma_biweight_mpe_logprob(x, mix_probs, a, b, n_photons, sigma=3.0):
     s = __sigma_scale * sigma
@@ -39,32 +41,59 @@ c_multi_gamma_biweight_mpe_logprob_v1d = jax.jit(jax.vmap(c_multi_gamma_biweight
 
 
 def postjitter_c_mpe_biweight(x, mix_probs, a, b, n, sigma=3.0, sigma_post=2.0):
-    nmax = 5.0
-    nint1 = 10
+    __sigma_scale = jnp.array(3.0)
+    nmax = jnp.array(4.0)
+    nmin = jnp.array(20.0)
+    nint1 = 5
     nint2 = 10
-    eps = 1.e-6
+    eps = jnp.array(1.e-6)
     x0 = -sigma * __sigma_scale # start of support of MPE convolved biweight
 
-    xmax = jnp.max(jnp.array([x0 + jnp.array(nmax * sigma_post), x + nmax * sigma_post]))
-    diff = xmax-x
-    xmin = jnp.max(jnp.array([jnp.array(x0)+eps, x - diff]))
-    xmin = jnp.max(jnp.array([jnp.array(x0), x - diff]))
+    xmax = jnp.max(jnp.array([x0 + nmax * sigma_post, x + nmax * sigma_post]))
+    xmin = jnp.max(jnp.array([x0, x - nmin * sigma_post]))
     mid_p = xmin + 0.2 * (xmax-xmin)
     xvals = jnp.concatenate([jnp.linspace(xmin, mid_p, nint1), jnp.linspace(mid_p, xmax, nint2)])
-
-    #xmax = jnp.max(jnp.array([nmax * sigma_post, x + nmax * sigma_post]))
-    #diff = xmax-x
-    #xmin = jnp.max(jnp.array([jnp.array(x0)+eps, x - diff]))
-    #xvals0 = jnp.linspace(jnp.array(x0)+eps, -7.0, 5)
-    #xvals1 = jnp.linspace(-7.0, 0.0, 7)
-    #xvals2 = jnp.linspace(jnp.max(jnp.array([0.0, xmin])), xmax, 10)
-    #xvals = jnp.sort(jnp.concatenate([xvals0, xvals1, xvals2]))
 
     dx = xvals[1:] - xvals[:-1]
     xvals = 0.5*(xvals[:-1]+xvals[1:])
     return jnp.sum(norm_pdf(xvals, loc=x, scale=sigma_post) * jnp.exp(c_multi_gamma_biweight_mpe_logprob_v1d(xvals, mix_probs, a, b, n, sigma)) * dx)
 
 postjitter_c_mpe_biweight_v = jax.jit(jax.vmap(postjitter_c_mpe_biweight, (0, 0, 0, 0, 0, None, None), 0))
+
+
+def mpe_pdf_no_conv(x, mix_probs, a, b, n):
+    g_pdf = tfd.MixtureSameFamily(
+                  mixture_distribution=tfd.Categorical(
+                      probs=mix_probs
+                      ),
+                  components_distribution=tfd.Gamma(
+                    concentration=a,
+                    rate=b,
+                    force_probs_to_zero_outside_support=True
+                      )
+    )
+    return n * g_pdf.prob(x) * jnp.power(g_pdf.survival_function(x), n-1.0)
+
+
+def combine(x, mix_probs, a, b, n, sigma, sigma_post):
+    crit = 40.0
+    crit_cond = x < crit
+
+    a_safe = jnp.where(crit_cond, jnp.ones((1, 3))+3.0, a)
+    b_safe = jnp.where(crit_cond, jnp.ones((1, 3))*1.e-3, b)
+    x_safe = jnp.where(crit_cond, 0.0, x)
+    n_safe = jnp.where(crit_cond, 1.0, n)
+    probs_no_conv = jnp.exp(c_multi_gamma_biweight_mpe_logprob(x_safe, mix_probs, a_safe, b_safe, n_safe, sigma))
+
+    a_safe = jnp.where(crit_cond, a, jnp.ones((1, 3))+3.0)
+    b_safe = jnp.where(crit_cond, b, jnp.ones((1, 3))*1.e-3)
+    x_safe = jnp.where(crit_cond, x, 0.0)
+    n_safe = jnp.where(crit_cond, n, 1.0)
+
+    probs_conv = postjitter_c_mpe_biweight(x_safe, mix_probs, a_safe, b_safe, n_safe, sigma, sigma_post)
+    return jnp.where(crit_cond, probs_conv, probs_no_conv)
+
+postjitter_c_mpe_biweight_combined_v = jax.vmap(combine, (0, 0, 0, 0, 0, None, None), 0)
 
 
 def _c_multi_gamma_biweight_prob(x, mix_probs, a, b, s, gincc_a_bspx, gincc_a_bxms):

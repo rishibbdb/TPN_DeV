@@ -322,8 +322,8 @@ def mpe_pdf_no_conv(x, mix_probs, a, b, n):
 
 
 def combine(x, mix_probs, a, b, n, sigma):
-    eps = 1.e-12
-    crit = 40.0
+    eps = jnp.array(1.e-12)
+    crit = jnp.array(40.0)
     x_safe = jnp.where(x < eps, eps, x)
     probs_no_conv = mpe_pdf_no_conv(x_safe, mix_probs, a, b, n)
     probs_conv = c_multi_gamma_mpe_prob_midpoint2(x, mix_probs, a, b, n, sigma)
