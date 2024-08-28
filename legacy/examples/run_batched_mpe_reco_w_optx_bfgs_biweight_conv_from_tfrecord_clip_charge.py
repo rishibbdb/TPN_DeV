@@ -17,10 +17,11 @@ from lib.geo import center_track_pos_and_time_based_on_data_batched_v
 from lib.experimental_methods import get_clean_pulses_fn_v
 from lib.network import get_network_eval_v_fn
 
-from likelihood_spe_padded_input import get_neg_c_triple_gamma_llh
+from likelihood_mpe_padded_input_biweight_conv_clip_charge import get_neg_c_triple_gamma_llh
 from lib.geo import get_xyz_from_zenith_azimuth, __c
-from dom_track_eval import get_eval_network_doms_and_track2 as get_eval_network_doms_and_track
+from dom_track_eval import get_eval_network_doms_and_track as get_eval_network_doms_and_track
 import time
+import glob
 
 dtype = jnp.float32
 eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/network',
@@ -28,9 +29,13 @@ eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/n
 eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=dtype)
 
 # Create padded batches (with different seq length).
-#tfrecord = "/home/storage2/hans/i3files/21220/ftr/data_ds_21220_from_*_to_*_1st_pulse.tfrecord"
+
+tfrecord = "/home/storage2/hans/i3files/21220/ftr/data_ds_21220_from_*_to_*_1st_pulse.tfrecord"
+fs = glob.glob(tfrecord)
 tfrecord = "/home/storage2/hans/i3files/21217/ftr/data_ds_21217_from_*_to_*_1st_pulse.tfrecord"
-batch_maker = I3SimBatchHandlerTFRecord(tfrecord, batch_size=8192)
+fs += glob.glob(tfrecord)
+
+batch_maker = I3SimBatchHandlerTFRecord(fs, batch_size=128)
 batch_iter = batch_maker.get_batch_iterator()
 
 # Until LLH has a noise-term, we need to remove crazy early noise pulses
@@ -72,44 +77,58 @@ def optimize_one_event(data, track_src, centered_track_time, centered_track_pos)
 # make it work on a batch.
 optimize_one_batch = jax.jit(jax.vmap(optimize_one_event, (0, 0, 0, 0), (0, 0)))
 
+# make logl calculation work on a batch.
+neg_llh_one_batch = jax.jit(jax.vmap(neg_llh, (0, 0, 0, 0), 0))
+
 def reconstruct_one_batch(data, mctruth):
     data_clean_padded = clean_pulses_fn_v(data, mctruth)
     centered_track_positions, centered_track_times = \
             center_track_pos_and_time_based_on_data_batched_v(data_clean_padded, mctruth)
     track_src_v = mctruth[:, 2:4]
+
+    true_logl = neg_llh_one_batch(track_src_v, centered_track_positions, centered_track_times, data_clean_padded)
+
     result_logl, result_x = optimize_one_batch(data_clean_padded,
                                            track_src_v,
                                            centered_track_times,
                                            centered_track_positions)
-    return result_x
+    return result_x, true_logl - result_logl
 
 # main loop over batches
 n_batches = 50
 
 results = []
-for i in range(n_batches):
+n_events = 0
+#for i in range(n_batches):
+while True:
     try:
         data, mctruth = batch_iter.next() # [Nev, Ndom, Nobs], [Nev, Naux]
         print(f"processing batch with shape ({data.shape[0]}, {data.shape[1]}, {data.shape[2]})")
+        n_events += data.shape[0]
         data = jnp.array(data.numpy())
         mctruth = jnp.array(mctruth.numpy())
         tic = time.time()
         jax.jit(reconstruct_one_batch).lower(data, mctruth).compile()
         toc = time.time()
         print(f"jit compilation took {toc-tic:.1f}s.")
-        result_x = jax.jit(reconstruct_one_batch)(data, mctruth)
+        result_x, delta_logl = jax.jit(reconstruct_one_batch)(data, mctruth)
         tac = time.time()
         print(f"computation took {tac-toc:.1f}s.")
-        y = jnp.column_stack([mctruth, result_x])
+        y = jnp.column_stack([mctruth, result_x, delta_logl])
         results.append(y)
+        print(f"overall took {tac-tic:.1f}s.")
+
+
+    except StopIteration:
+        print("Reached end of batch iterator. Stopping reconstruction.")
+        break
 
     except Exception as e:
+        print("broke before reaching the end.")
         print(e)
-        print("Reached end of batch iterator early. Stopping reconstruction here.")
-        break
+        assert False, "Quitting because of unexpected error."
 
 # store results.
 results = jnp.concatenate(results)
-#np.save("reco_result_21220_tfrecord_altrho2_1st_pulse_tsigma_2.0.npy", results)
-#np.save("reco_result_21217_tfrecord_altrho2_1st_pulse_tsigma_2.0.npy", results)
-
+np.save("reco_result_21217_21220_tfrecord_biweight_conv_1st_pulse_MPE_tsigma_4.0_clip_charge.npy", results)
+print("processed total of:", n_events, "events")

@@ -17,10 +17,14 @@ from lib.geo import center_track_pos_and_time_based_on_data_batched_v
 from lib.experimental_methods import get_clean_pulses_fn_v
 from lib.network import get_network_eval_v_fn
 
-from likelihood_spe_padded_input import get_neg_c_triple_gamma_llh
-from lib.geo import get_xyz_from_zenith_azimuth, __c
+#from likelihood_mpe_padded_input import get_neg_c_triple_gamma_llh
+from likelihood_mpe_padded_input_clip_charge import get_neg_c_triple_gamma_llh
+from lib.geo import get_xyz_from_zenith_azimuth_v, __c
+from lib.geo import closest_distance_dom_track_v
 from dom_track_eval import get_eval_network_doms_and_track2 as get_eval_network_doms_and_track
 import time
+
+closest_distance_dom_track_vv = jax.jit(jax.vmap(closest_distance_dom_track_v, (0, 0, 0), 0))
 
 dtype = jnp.float32
 eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/network',
@@ -28,8 +32,8 @@ eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/n
 eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=dtype)
 
 # Create padded batches (with different seq length).
-#tfrecord = "/home/storage2/hans/i3files/21220/ftr/data_ds_21220_from_*_to_*_1st_pulse.tfrecord"
-tfrecord = "/home/storage2/hans/i3files/21217/ftr/data_ds_21217_from_*_to_*_1st_pulse.tfrecord"
+tfrecord = "/home/storage2/hans/i3files/21220/ftr/data_ds_21220_from_*_to_*_1st_pulse.tfrecord"
+#tfrecord = "/home/storage2/hans/i3files/21217/ftr/data_ds_21217_from_*_to_*_1st_pulse.tfrecord"
 batch_maker = I3SimBatchHandlerTFRecord(tfrecord, batch_size=8192)
 batch_iter = batch_maker.get_batch_iterator()
 
@@ -72,16 +76,31 @@ def optimize_one_event(data, track_src, centered_track_time, centered_track_pos)
 # make it work on a batch.
 optimize_one_batch = jax.jit(jax.vmap(optimize_one_event, (0, 0, 0, 0), (0, 0)))
 
+# make logl calculation work on a batch.
+neg_llh_one_batch = jax.jit(jax.vmap(neg_llh, (0, 0, 0, 0), 0))
+
 def reconstruct_one_batch(data, mctruth):
     data_clean_padded = clean_pulses_fn_v(data, mctruth)
+
     centered_track_positions, centered_track_times = \
             center_track_pos_and_time_based_on_data_batched_v(data_clean_padded, mctruth)
     track_src_v = mctruth[:, 2:4]
+
+    # some funky suppression of charge
+    track_dir_xyz = get_xyz_from_zenith_azimuth_v(track_src_v)
+    dists = closest_distance_dom_track_vv(data_clean_padded[..., :3], centered_track_positions, track_dir_xyz)
+    charges = data_clean_padded[..., 4]
+    max_charges = 3.6*jnp.exp(0.23*dists)+1
+    n_photons = jnp.floor(jnp.clip(charges, min=1.0, max=10))
+    data_clean_padded = jnp.concatenate([data_clean_padded[..., :4], n_photons[..., jnp.newaxis]], axis=-1)
+
+    true_logl = neg_llh_one_batch(track_src_v, centered_track_positions, centered_track_times, data_clean_padded)
+
     result_logl, result_x = optimize_one_batch(data_clean_padded,
                                            track_src_v,
                                            centered_track_times,
                                            centered_track_positions)
-    return result_x
+    return result_x, true_logl - result_logl
 
 # main loop over batches
 n_batches = 50
@@ -94,14 +113,11 @@ for i in range(n_batches):
         data = jnp.array(data.numpy())
         mctruth = jnp.array(mctruth.numpy())
         tic = time.time()
-        jax.jit(reconstruct_one_batch).lower(data, mctruth).compile()
+        result_x, delta_logl = reconstruct_one_batch(data, mctruth)
         toc = time.time()
-        print(f"jit compilation took {toc-tic:.1f}s.")
-        result_x = jax.jit(reconstruct_one_batch)(data, mctruth)
-        tac = time.time()
-        print(f"computation took {tac-toc:.1f}s.")
-        y = jnp.column_stack([mctruth, result_x])
+        y = jnp.column_stack([mctruth, result_x, delta_logl])
         results.append(y)
+        print(f"took {toc-tic:.1f}s.")
 
     except Exception as e:
         print(e)
@@ -110,6 +126,6 @@ for i in range(n_batches):
 
 # store results.
 results = jnp.concatenate(results)
-#np.save("reco_result_21220_tfrecord_altrho2_1st_pulse_tsigma_2.0.npy", results)
-#np.save("reco_result_21217_tfrecord_altrho2_1st_pulse_tsigma_2.0.npy", results)
+#np.save("reco_result_21220_tfrecord_altrho2_1st_pulse_MPE_tsigma_2.0_clip_charge_dyn.npy", results)
+np.save("reco_result_21217_tfrecord_altrho2_1st_pulse_MPE_tsigma_2.0_clip_charge_dyn.npy", results)
 
