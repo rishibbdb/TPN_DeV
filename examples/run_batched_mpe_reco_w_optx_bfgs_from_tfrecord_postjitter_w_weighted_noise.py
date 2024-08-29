@@ -85,8 +85,9 @@ neg_llh_one_batch = jax.jit(jax.vmap(neg_llh, (0, 0, 0, 0), 0))
 
 def reconstruct_one_batch(data, mctruth):
     # shift seed to "center of data"
+    mctruth_ = mctruth[:, 2:8]
     centered_track_positions, centered_track_times = \
-            center_track_pos_and_time_based_on_data_batched_v(data, mctruth)
+            center_track_pos_and_time_based_on_data_batched_v(data, mctruth_)
     track_src_v = mctruth[:, 2:4]
 
     true_logl = neg_llh_one_batch(track_src_v, centered_track_positions, centered_track_times, data)

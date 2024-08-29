@@ -46,15 +46,16 @@ batch_iter = batch_maker.get_batch_iterator()
 # And set up likelihood for batched processing
 neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
 
-scale = 20.0
+scale = 3.0
+scale_rad = 100.0
 @jax.jit
 def neg_llh_5D(x, args):
         centered_track_time = args[0]
         fitting_event_data = args[1]
 
         # project back if outside of [0, pi] x [0, 2*pi]
-        zenith = x[0] / scale
-        azimuth = x[1] / scale
+        zenith = x[0] / scale_rad
+        azimuth = x[1] / scale_rad
         zenith = jnp.fmod(zenith, 2.0*jnp.pi)
         zenith = jnp.where(zenith < 0, zenith+2.0*jnp.pi, zenith)
         cond = zenith > jnp.pi
@@ -71,7 +72,7 @@ def neg_llh_5D(x, args):
 def optimize_one_event(data, track_src, centered_track_time, centered_track_pos):
     args=[centered_track_time, data]
     solver = optx.BFGS(rtol=1e-8, atol=1e-4, use_inverse=True)
-    x0 = jnp.concatenate([track_src*scale, centered_track_pos/scale])
+    x0 = jnp.concatenate([track_src*scale_rad, centered_track_pos/scale])
     best_x = optx.minimise(neg_llh_5D, solver, x0, args=args, throw=False).value
     best_logl = neg_llh_5D(best_x, args=args)
     return best_logl, best_x
@@ -84,12 +85,12 @@ neg_llh_one_batch = jax.jit(jax.vmap(neg_llh, (0, 0, 0, 0), 0))
 
 def reconstruct_one_batch(data, mctruth):
     # shift seed to "center of data"
+    mctruth_ = mctruth[:, 2:8]
     centered_track_positions, centered_track_times = \
-            center_track_pos_and_time_based_on_data_batched_v(data, mctruth)
+            center_track_pos_and_time_based_on_data_batched_v(data, mctruth_)
     track_src_v = mctruth[:, 2:4]
 
     true_logl = neg_llh_one_batch(track_src_v, centered_track_positions, centered_track_times, data)
-    centered_track_times = centered_track_times - jnp.array(5.0)
 
     result_logl, result_x = optimize_one_batch(data,
                                            track_src_v,
@@ -125,5 +126,5 @@ for i in range(n_batches):
 
 # store results.
 results = jnp.concatenate(results)
-np.save("reco_result_21217_21220_sigma_3.0_clipcharge200_c_multi_gamma_mpe_prob_midpoint2_v_AND_weighted_noise.npy", results)
+np.save("reco_result_21217_21220_sigma_3.0_clipcharge200_c_multi_gamma_mpe_prob_combined_v_AND_weighted_noise.npy", results)
 
