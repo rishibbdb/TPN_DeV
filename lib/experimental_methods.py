@@ -74,7 +74,7 @@ def get_prop_perp_direcs(theta, phi):
         x = jnp.array([theta, phi])
         v_dir = convert_spherical_to_cartesian_direction(x)
 
-        dir1 = np.array(
+        dir1 = jnp.array(
             [
                 jnp.cos(phi) * jnp.sin(theta - jnp.pi / 2.0),
                 jnp.sin(phi) * jnp.sin(theta - jnp.pi / 2.0),
@@ -123,14 +123,14 @@ def get_vert_seeds(
 
         for j, r in enumerate(r_ax):
             for ang in ang_ax:
-                d1 = r * np.cos(ang + (i + j) * dang) * dir1
-                d2 = r * np.sin(ang + (i + j) * dang) * dir2
+                d1 = r * jnp.cos(ang + (i + j) * dang) * dir1
+                d2 = r * jnp.sin(ang + (i + j) * dang) * dir2
 
                 x = v[0] + d1[0] + d2[0]
                 y = v[1] + d1[1] + d2[1]
                 z = v[2] + d1[2] + d2[2]
 
-                pos = np.array([
+                pos = jnp.array([
                     vert_mid[0] + x,
                     vert_mid[1] + y,
                     vert_mid[2] + z
@@ -139,3 +139,65 @@ def get_vert_seeds(
                 pos_seeds.append(pos)
 
     return pos_seeds
+
+
+def get_vertex_seeds(seed, direction):
+    """[Given a vertex and a direction it returns some vertex seeds to perform a SplineMPE fit
+        these vertexes are by default 7, one is the initial one, the othes 6 are chosen along
+        a cylinder with characteristics specified by v_ax and r_ax and ang_steps]
+
+    Args:
+        vert_mid ([]): The initial vertex
+        direc ([]): The direction in the sky
+        v_ax ([list of floats], optional): the list of steps along the direction to do to find
+                                           the vertexes
+        r_ax ([list of floats], optional): the list of radius of the cylinders used to find the
+                                           vertexes
+        ang_steps([int], optional): the number of seeds to be taken on each basis of a cylinder
+
+    Returns:
+        pos_seeds ([list of I3Position]): the list of vertex seeds
+
+    """
+    v_ax = jnp.array([-30.0, -15.0, 15.0, 30.0])
+    r_ax = jnp.array([15.0, 30.0])
+    ang_steps = 3
+
+    theta, phi = direction[0], direction[1]
+
+    ang_ax = jnp.linspace(0, 2.0 * jnp.pi, ang_steps + 1)[:-1]
+    dang = (ang_ax[1] - ang_ax[0]) / 2.0
+
+    r_ax_idx = jnp.arange(r_ax.shape[0])
+    v_dir, dir1, dir2 = get_prop_perp_direcs(theta, phi)
+
+
+    pos_dx = calc_vertex_seeds_v(r_ax_idx, r_ax, v_ax, v_dir, dir1, dir2, ang_ax)
+    pos_dx = pos_dx.reshape((pos_dx.shape[0]*pos_dx.shape[1], pos_dx.shape[2]))
+
+    seeds = seed + pos_dx
+    return jnp.concatenate([seeds, seed.reshape((1,3))])
+
+
+def	calc_vertex_seeds(r_ax_idx, r, v_ax, v_dir, dir1, dir2, ang_ax):
+    v_dir = jnp.expand_dims(v_dir, axis=0)
+    v_ax = jnp.expand_dims(v_ax, axis=-1)
+    v = v_ax * v_dir # (N_vax, 3) ==> N_vax * [[x, y, z]]
+    v_ax_idx = jnp.arange(v.shape[0]) # N_vax
+    dang = (ang_ax[1] - ang_ax[0]) / 2.0
+
+    # (N_ang_ax, N_vax)
+    d1 = r * jnp.cos(jnp.expand_dims(ang_ax, axis=-1) + (jnp.expand_dims(v_ax_idx, axis=0) + r_ax_idx) * dang)
+    d2 = r * jnp.sin(jnp.expand_dims(ang_ax, axis=-1) + (jnp.expand_dims(v_ax_idx, axis=0) + r_ax_idx) * dang)
+
+    # (N_ang_ax, N_vax, 1) * (1, 1, 3)
+    d1 = jnp.expand_dims(d1, axis=-1) * jnp.expand_dims(jnp.expand_dims(dir1, axis=0), axis=0)
+    d2 = jnp.expand_dims(d2, axis=-1) * jnp.expand_dims(jnp.expand_dims(dir2, axis=0), axis=0)
+
+    # (N_ang_ax, N_vax, 3)
+    x = jnp.expand_dims(v, axis=0) + d1 + d2
+    # (N_ang_ax * N_vax , 3)
+    x = x.reshape((x.shape[0] * x.shape[1], x.shape[2]))
+    return x
+
+calc_vertex_seeds_v = jax.jit(jax.vmap(calc_vertex_seeds, (0, 0, None, None, None, None, None), 0))
