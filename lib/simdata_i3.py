@@ -143,11 +143,14 @@ class I3SimBatchHandlerFtr:
 
 class I3SimBatchHandlerTFRecord:
     @tf.autograph.experimental.do_not_convert
-    def __init__(self, infile, batch_size=128, n_features=5, n_labels=14):
+    def __init__(self, infile, batch_size=128, n_features=5, n_labels=14, pad_to_bucket_boundary=True, n_bins=20, bucket_batch_sizes=None):
         self.tf_dataset = tfrecords_reader_dataset(infile,
                                                     batch_size=batch_size,
                                                     n_features=n_features,
-                                                    n_labels=n_labels)
+                                                    n_labels=n_labels,
+                                                    n_bins=n_bins,
+                                                    pad_to_bucket_boundary=pad_to_bucket_boundary,
+                                                    bucket_batch_sizes=bucket_batch_sizes)
 
     def get_batch_iterator(self):
         return iter(self.tf_dataset)
@@ -172,7 +175,7 @@ def parse_tfr_element(element, n_features=5, n_labels=14):
   return (feature, label)
 
 
-def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14):
+def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14, pad_to_bucket_boundary=True, n_bins=20, bucket_batch_sizes=None):
     if '*' in infile:
         dataset = tf.data.Dataset.list_files(infile, shuffle=False)
         dataset = tf.data.TFRecordDataset(dataset, compression_type='')
@@ -196,12 +199,21 @@ def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14):
     #    )
 
     n_doms_max = 5170
-    n_bins = 20
-    #n_bins = 10
     edges = np.logspace(0.5, np.log10(n_doms_max), n_bins+1).astype(int)
-    factor = np.median(edges[1:] / edges[:-1])
-    scale = np.power(factor, np.arange(n_bins+2)[::-1])
-    bucket_batch_sizes = scale * batch_size
+    if bucket_batch_sizes is None:
+        factor = np.median(edges[1:] / edges[:-1])
+        scale = np.power(factor, np.arange(n_bins+2)[::-1])
+        bucket_batch_sizes = scale * batch_size
+
+    else:
+        bucket_batch_sizes = np.array(bucket_batch_sizes)
+
+    #bucket_batch_sizes = 20 * np.ones_like(scale)
+    #bucket_batch_sizes = np.clip(bucket_batch_sizes, a_min=1.0, a_max=30.0)
+    #print(bucket_batch_sizes)
+    #print(edges)
+
+
     bucket_batch_sizes = bucket_batch_sizes.astype(int)
 
     _element_length_funct = lambda x, y: tf.shape(x)[0]
@@ -210,7 +222,7 @@ def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14):
             bucket_boundaries = edges.tolist(),
             bucket_batch_sizes = bucket_batch_sizes.tolist(),
             drop_remainder = False,
-            pad_to_bucket_boundary=True,
+            pad_to_bucket_boundary=pad_to_bucket_boundary,
         )
 
     return dataset.prefetch(tf.data.AUTOTUNE)
