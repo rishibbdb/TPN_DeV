@@ -22,7 +22,7 @@ def get_eval_network_doms_and_track(eval_network_v_fn, dtype=jnp.float64):
         track_dir_xyz = get_xyz_from_zenith_azimuth(track_dir)
 
         geo_time, closest_approach_dist, closest_approach_z, closest_approach_rho = \
-            cherenkov_cylinder_coordinates_w_rho_v(dom_pos,
+            cherenkov_cylinder_coordinates_w_rho2_v(dom_pos,
                                          track_vertex,
                                          track_dir_xyz)
 
@@ -69,7 +69,7 @@ def get_eval_network_doms_and_track_w_charge(eval_network_v_fn, eval_charge_netw
         track_dir_xyz = get_xyz_from_zenith_azimuth(track_dir)
 
         geo_time, closest_approach_dist, closest_approach_z, closest_approach_rho = \
-            cherenkov_cylinder_coordinates_w_rho_v(dom_pos,
+            cherenkov_cylinder_coordinates_w_rho2_v(dom_pos,
                                          track_vertex,
                                          track_dir_xyz)
 
