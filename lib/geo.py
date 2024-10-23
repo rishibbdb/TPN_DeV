@@ -19,9 +19,9 @@ def center_track_pos_and_time_based_on_data(event_data: pd.DataFrame, track_pos,
     return jnp.array(centered_track_pos), jnp.float64(centered_track_time)
 
 def center_track_pos_and_time_based_on_data_batched(data, mctruth):
-    track_dir = mctruth[2:4]
-    track_time = mctruth[4]
-    track_pos = mctruth[5:8]
+    track_dir = mctruth[:2]
+    track_time = mctruth[2]
+    track_pos = mctruth[3:]
 
     track_dir_xyz = get_xyz_from_zenith_azimuth(track_dir)
     charge = data[:, 4]
