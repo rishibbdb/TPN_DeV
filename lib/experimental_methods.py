@@ -213,27 +213,26 @@ def get_first_regular_pulse(pulses, t1, q_tot, crit_delta=10, crit_ratio = 2.e-3
     charge = pulses['charge'].to_numpy()
     time = pulses['time'].to_numpy()
 
-    q_veto = 0.0
-    crit_time = time[0] + crit_delta
-    i, j = 0, 0
-    while j < n and time[j] <= crit_time:
-        q_veto += charge[j]
-        j += 1
+    j = 0
+    q_veto = 0
+    for i in range(0, n):
+        crit_time = time[i] + crit_delta
+        if j < i:
+            j = i
 
-    r_veto = q_veto / q_tot
-
-    while i < n-1 and r_veto < crit_ratio:
-        # remove early pulse
-        q_tot -= charge[i]
-        q_veto -= charge[i]
-
-        # extend veto window
-        t_crit = time[i+1] + crit_time
-        while j < n and time[j] <= crit_time:
+        # extend window
+        while j < n and time[j] < crit_time:
             q_veto += charge[j]
             j += 1
 
-        crit_ratio = q_veto / q_tot
-        i += 1
+        r_veto = q_veto / q_tot
+        if r_veto > crit_ratio:
+            # found a reasonable pulse
+            # break
+            break
+
+        # remove early pulse
+        q_tot -= charge[i]
+        q_veto -= charge[i]
 
     return time[i]
