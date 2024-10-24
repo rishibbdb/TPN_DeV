@@ -4,6 +4,8 @@ import jax
 import jax.numpy as jnp
 import itertools
 
+from lib.experimental_methods import get_first_regular_pulse
+
 try:
     import tensorflow as tf
 except ImportError:
@@ -33,7 +35,11 @@ class I3SimHandler:
         event_data = (self.events_data.iloc[int(event_meta.idx_start): int(event_meta.idx_end + 1)]).copy(deep=True)
         return event_meta, event_data
 
-    def get_per_dom_summary_from_sim_data(self, meta: pd.DataFrame, pulses: pd.DataFrame, charge_key='charge') -> pd.DataFrame:
+    def get_per_dom_summary_from_sim_data(self,
+                                          meta: pd.DataFrame,
+                                          pulses: pd.DataFrame,
+                                          charge_key='charge') -> pd.DataFrame:
+
         df_qtot = pulses[['sensor_id', charge_key]].groupby(by=['sensor_id'], as_index=False).sum()
         df_tmin = pulses[['sensor_id', 'time']].groupby(by=['sensor_id'], as_index=False).min()
         df = df_qtot.merge(self.geo.iloc[df_qtot['sensor_id']], on='sensor_id', how='outer')
@@ -44,58 +50,31 @@ class I3SimHandler:
         return df
 
     def get_per_dom_summary_from_index(self, event_index: int, charge_key='charge') -> pd.DataFrame:
+        #df_qtot = pulses[['sensor_id', charge_key]].groupby(by=['sensor_id'], as_index=False).sum()
+        #df_tmin = pulses[['sensor_id', 'time']].groupby(by=['sensor_id'], as_index=False).min()
+        #df = df_qtot.merge(self.geo.iloc[df_qtot['sensor_id']], on='sensor_id', how='outer')
+        #df['time'] = df_tmin['time'].values
+
+        #if charge_key != 'charge':
+        #    df.rename({charge_key: 'charge'}, inplace=True, axis='columns')
+        #return df
+
+        # avoid duplicating code (see above)
         meta, pulses = self.get_event_data(event_index)
-        df_qtot = pulses[['sensor_id', charge_key]].groupby(by=['sensor_id'], as_index=False).sum()
-        df_tmin = pulses[['sensor_id', 'time']].groupby(by=['sensor_id'], as_index=False).min()
-        df = df_qtot.merge(self.geo.iloc[df_qtot['sensor_id']], on='sensor_id', how='outer')
-        df['time'] = df_tmin['time'].valuesA
+        return self.get_per_dom_summary_from_sim_data(meta, pulses, charge_key=charge_key)
 
-        if charge_key != 'charge':
-            df.rename({charge_key: 'charge'}, inplace=True, axis='columns')
-        return df
+    def replace_early_pulse(self, summary_data, pulses):
+        corrected_time = np.zeros(len(summary_data))
+        for i, row in summary_data.iterrows():
+            s_id = row['sensor_id']
+            q_tot = row['charge']
+            t1 = row['time']
 
-    def get_per_dom_summary_extended_from_sim_data(self,
-                                                meta: pd.DataFrame,
-                                                pulses: pd.DataFrame,
-                                                n_pulses: int=5) -> np.ndarray:
+            idx = pulses['sensor_id'] == s_id
+            pulses_this_dom = pulses[idx]
+            corrected_time[i] = get_first_regular_pulse(pulses_this_dom, t1, q_tot)
 
-        pulses_sorted = pulses.sort_values(["sensor_id", "time"]).groupby("sensor_id").head(n_pulses)
-        sensors = pulses_sorted['sensor_id'].unique()
-        dom_locations = self.geo.iloc[sensors][["x", "y", "z"]].to_numpy()
-
-        df = pulses_sorted[['sensor_id', 'time', 'charge']].groupby('sensor_id').agg(list).reset_index()
-
-        padded_time = df['time'].apply(lambda row: self._padding(row, n_pulses)).explode().to_numpy()
-        padded_time = np.array(padded_time.reshape((len(sensors), n_pulses))).astype(float)
-
-        padded_charge = df['charge'].apply(lambda row: self._padding(row, n_pulses)).explode().to_numpy()
-        padded_charge = np.array(padded_charge.reshape((len(sensors), n_pulses))).astype(float)
-
-        return np.concatenate([dom_locations, padded_time, padded_charge], axis=1)
-
-    def get_per_dom_summary_extended_from_index(self,
-                                                event_index: int,
-                                                n_pulses: int=5) -> np.ndarray:
-
-        meta, pulses = self.get_event_data(event_index)
-        pulses_sorted = pulses.sort_values(["sensor_id", "time"]).groupby("sensor_id").head(n_pulses)
-        sensors = pulses_sorted['sensor_id'].unique()
-        dom_locations = self.geo.iloc[sensors][["x", "y", "z"]].to_numpy()
-
-        df = pulses_sorted[['sensor_id', 'time', 'charge']].groupby('sensor_id').agg(list).reset_index()
-
-        padded_time = df['time'].apply(lambda row: self._padding(row, n_pulses)).explode().to_numpy()
-        padded_time = np.array(padded_time.reshape((len(sensors), n_pulses))).astype(float)
-
-        padded_charge = df['charge'].apply(lambda row: self._padding(row, n_pulses)).explode().to_numpy()
-        padded_charge = np.array(padded_charge.reshape((len(sensors), n_pulses))).astype(float)
-
-        return np.concatenate([dom_locations, padded_time, padded_charge], axis=1)
-
-    def _padding(self, row, n_pulses):
-        pad_vals = [0.0] * (n_pulses - len(row))
-        return [x for x in itertools.chain(row, pad_vals)]
-
+        summary_data['time'] = corrected_time
 
 class I3SimBatchHandlerFtr:
     @tf.autograph.experimental.do_not_convert
@@ -213,7 +192,6 @@ def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14, pad_
     #print(bucket_batch_sizes)
     #print(edges)
 
-
     bucket_batch_sizes = bucket_batch_sizes.astype(int)
 
     _element_length_funct = lambda x, y: tf.shape(x)[0]
@@ -226,6 +204,3 @@ def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14, pad_
         )
 
     return dataset.prefetch(tf.data.AUTOTUNE)
-
-
-

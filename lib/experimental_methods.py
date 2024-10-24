@@ -201,3 +201,39 @@ def	calc_vertex_seeds(r_ax_idx, r, v_ax, v_dir, dir1, dir2, ang_ax):
     return x
 
 calc_vertex_seeds_v = jax.jit(jax.vmap(calc_vertex_seeds, (0, 0, None, None, None, None, None), 0))
+
+
+def get_first_regular_pulse(pulses, t1, q_tot, crit_delta=10, crit_ratio = 2.e-3, crit_charge=300.):
+    # technically, if we do remove early pulses, one could correct the total charge.
+    # in practice, this would be an epsilon correction. Not worth adding the extra code complexity.
+    if q_tot < crit_charge:
+        return t1
+
+    n = len(pulses)
+    charge = pulses['charge'].to_numpy()
+    time = pulses['time'].to_numpy()
+
+    q_veto = 0.0
+    crit_time = time[0] + crit_delta
+    i, j = 0, 0
+    while j < n and time[j] <= crit_time:
+        q_veto += charge[j]
+        j += 1
+
+    r_veto = q_veto / q_tot
+
+    while i < n-1 and r_veto < crit_ratio:
+        # remove early pulse
+        q_tot -= charge[i]
+        q_veto -= charge[i]
+
+        # extend veto window
+        t_crit = time[i+1] + crit_time
+        while j < n and time[j] <= crit_time:
+            q_veto += charge[j]
+            j += 1
+
+        crit_ratio = q_veto / q_tot
+        i += 1
+
+    return time[i]
