@@ -179,7 +179,7 @@ def get_vertex_seeds(seed, direction):
     return jnp.concatenate([seeds, seed.reshape((1,3))])
 
 
-def	calc_vertex_seeds(r_ax_idx, r, v_ax, v_dir, dir1, dir2, ang_ax):
+def calc_vertex_seeds(r_ax_idx, r, v_ax, v_dir, dir1, dir2, ang_ax):
     v_dir = jnp.expand_dims(v_dir, axis=0)
     v_ax = jnp.expand_dims(v_ax, axis=-1)
     v = v_ax * v_dir # (N_vax, 3) ==> N_vax * [[x, y, z]]
@@ -206,6 +206,7 @@ calc_vertex_seeds_v = jax.jit(jax.vmap(calc_vertex_seeds, (0, 0, None, None, Non
 def get_first_regular_pulse(pulses, t1, q_tot, crit_delta=10, crit_ratio = 2.e-3, crit_charge=300.):
     # technically, if we do remove early pulses, one could correct the total charge.
     # in practice, this would be an epsilon correction. Not worth adding the extra code complexity.
+    # calculate ratio between charge within 10ns of pulse and total charge.
     if q_tot < crit_charge:
         return t1
 
@@ -233,6 +234,54 @@ def get_first_regular_pulse(pulses, t1, q_tot, crit_delta=10, crit_ratio = 2.e-3
 
         # remove early pulse
         q_tot -= charge[i]
+        q_veto -= charge[i]
+
+    return time[i]
+
+
+def get_first_regular_pulse2(pulses, t1, q_tot, crit_delta=10, crit_ratio = 5.e-3, crit_charge=100.):
+    # technically, if we do remove early pulses, one could correct the total charge.
+    # in practice, this would be an epsilon correction. Not worth adding the extra code complexity.
+    # calculate ratio of charge within 10ns and 75ns of hit.
+    if q_tot < crit_charge:
+        return t1
+
+    n = len(pulses)
+    charge = pulses['charge'].to_numpy()
+    time = pulses['time'].to_numpy()
+    crit_delta_long = 75
+
+    j = 0 # pts to end of crit_delta interval
+    k = 0 # pts to end of crit_delta_long interval
+    q_veto = 0
+    q_long = 0
+    for i in range(0, n):
+        crit_time = time[i] + crit_delta
+        if j < i:
+            j = i
+
+        # extend window
+        while j < n and time[j] < crit_time:
+            q_veto += charge[j]
+            j += 1
+
+        crit_time = time[i] + crit_delta_long
+        if k < i:
+            k = i
+
+        # extend window
+        while k < n and time[k] < crit_time:
+            q_long += charge[k]
+            k += 1
+
+        r_veto = q_veto / q_long
+        if r_veto > crit_ratio:
+            # found a reasonable pulse
+            # break
+            break
+
+        # remove early pulse
+        q_long -= charge[i]
         q_veto -= charge[i]
 
     return time[i]

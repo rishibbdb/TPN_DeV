@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import itertools
 
-from lib.experimental_methods import get_first_regular_pulse
+from lib.experimental_methods import get_first_regular_pulse, get_first_regular_pulse2
 
 try:
     import tensorflow as tf
@@ -63,7 +63,7 @@ class I3SimHandler:
         meta, pulses = self.get_event_data(event_index)
         return self.get_per_dom_summary_from_sim_data(meta, pulses, charge_key=charge_key)
 
-    def replace_early_pulse(self, summary_data, pulses):
+    def replace_early_pulse(self, summary_data, pulses, compare_to_qtot=False):
         corrected_time = np.zeros(len(summary_data))
         for i, row in summary_data.iterrows():
             s_id = row['sensor_id']
@@ -72,7 +72,10 @@ class I3SimHandler:
 
             idx = pulses['sensor_id'] == s_id
             pulses_this_dom = pulses[idx]
-            corrected_time[i] = get_first_regular_pulse(pulses_this_dom, t1, q_tot)
+            if compare_to_qtot:
+                corrected_time[i] = get_first_regular_pulse(pulses_this_dom, t1, q_tot)
+            else:
+                corrected_time[i] = get_first_regular_pulse2(pulses_this_dom, t1, q_tot)
 
         summary_data['time'] = corrected_time
 
