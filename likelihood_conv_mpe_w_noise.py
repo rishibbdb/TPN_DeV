@@ -24,7 +24,7 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
         first_hit_times = event_data[:, 3]
         charges = event_data[:, 4]
         n_photons = jnp.round(charges + 0.5)
-        n_photons = jnp.clip(n_photons, min=1, max=200)
+        n_photons = jnp.clip(n_photons, min=1, max=1000)
 
         logits, av, bv, geo_time = eval_network_doms_and_track_fn(dom_pos, track_vertex, track_direction)
         delay_time = first_hit_times - (geo_time + track_time)
