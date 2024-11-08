@@ -202,7 +202,7 @@ g.close()
 
 f = dataio.I3File(merged_outfile)
 
-sigma_list = [6.0, 8.0, 10.0, 12.0, 14.0]
+sigma_list = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 pulse_data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[]}
 for sigma in sigma_list:
     pulse_data[f'corrected_charge_{sigma:.1f}'] = []

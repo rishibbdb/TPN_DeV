@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import itertools
 
-from lib.experimental_methods import get_first_regular_pulse, get_first_regular_pulse2
+from lib.experimental_methods import get_first_regular_pulse
 
 try:
     import tensorflow as tf
@@ -63,7 +63,7 @@ class I3SimHandler:
         meta, pulses = self.get_event_data(event_index)
         return self.get_per_dom_summary_from_sim_data(meta, pulses, charge_key=charge_key)
 
-    def replace_early_pulse(self, summary_data, pulses, compare_to_qtot=False):
+    def replace_early_pulse(self, summary_data, pulses):
         corrected_time = np.zeros(len(summary_data))
         for i, row in summary_data.iterrows():
             s_id = row['sensor_id']
@@ -72,10 +72,9 @@ class I3SimHandler:
 
             idx = pulses['sensor_id'] == s_id
             pulses_this_dom = pulses[idx]
-            if compare_to_qtot:
-                corrected_time[i] = get_first_regular_pulse(pulses_this_dom, t1, q_tot)
-            else:
-                corrected_time[i] = get_first_regular_pulse2(pulses_this_dom, t1, q_tot)
+            corrected_time[i] = get_first_regular_pulse(pulses_this_dom, t1, q_tot)
+
+
 
         summary_data['time'] = corrected_time
 
@@ -125,14 +124,15 @@ class I3SimBatchHandlerFtr:
 
 class I3SimBatchHandlerTFRecord:
     @tf.autograph.experimental.do_not_convert
-    def __init__(self, infile, batch_size=128, n_features=5, n_labels=14, pad_to_bucket_boundary=True, n_bins=20, bucket_batch_sizes=None):
+    def __init__(self, infile, batch_size=128, n_features=5, n_labels=14, pad_to_bucket_boundary=True, n_bins=20, bucket_batch_sizes=None, n_doms_max=5170):
         self.tf_dataset = tfrecords_reader_dataset(infile,
                                                     batch_size=batch_size,
                                                     n_features=n_features,
                                                     n_labels=n_labels,
                                                     n_bins=n_bins,
                                                     pad_to_bucket_boundary=pad_to_bucket_boundary,
-                                                    bucket_batch_sizes=bucket_batch_sizes)
+                                                    bucket_batch_sizes=bucket_batch_sizes,
+                                                    n_doms_max = n_doms_max)
 
     def get_batch_iterator(self):
         return iter(self.tf_dataset)
@@ -157,7 +157,7 @@ def parse_tfr_element(element, n_features=5, n_labels=14):
   return (feature, label)
 
 
-def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14, pad_to_bucket_boundary=True, n_bins=20, bucket_batch_sizes=None):
+def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14, pad_to_bucket_boundary=True, n_bins=20, bucket_batch_sizes=None, n_doms_max=5170):
     if '*' in infile:
         dataset = tf.data.Dataset.list_files(infile, shuffle=False)
         dataset = tf.data.TFRecordDataset(dataset, compression_type='')
@@ -180,7 +180,6 @@ def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14, pad_
     #        pad_to_bucket_boundary=False,
     #    )
 
-    n_doms_max = 5170
     edges = np.logspace(0.5, np.log10(n_doms_max), n_bins+1).astype(int)
     if bucket_batch_sizes is None:
         factor = np.median(edges[1:] / edges[:-1])

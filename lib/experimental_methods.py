@@ -159,8 +159,10 @@ def get_vertex_seeds(seed, direction):
         pos_seeds ([list of I3Position]): the list of vertex seeds
 
     """
-    v_ax = jnp.array([-30.0, -15.0, 15.0, 30.0])
-    r_ax = jnp.array([15.0, 30.0])
+    #v_ax = jnp.array([-30.0, -15.0, 15.0, 30.0])
+    #r_ax = jnp.array([15.0, 30.0])
+    v_ax = jnp.array([10.0 , 20.0])
+    r_ax = jnp.array([15.0])
     ang_steps = 3
 
     theta, phi = direction[0], direction[1]
@@ -202,8 +204,8 @@ def calc_vertex_seeds(r_ax_idx, r, v_ax, v_dir, dir1, dir2, ang_ax):
 
 calc_vertex_seeds_v = jax.jit(jax.vmap(calc_vertex_seeds, (0, 0, None, None, None, None, None), 0))
 
-
-def get_first_regular_pulse(pulses, t1, q_tot, crit_delta=10, crit_ratio = 2.e-3, crit_charge=300.):
+'''
+def get_first_regular_pulse_old(pulses, t1, q_tot, crit_delta=10, crit_ratio = 2.e-3, crit_charge=300.):
     # technically, if we do remove early pulses, one could correct the total charge.
     # in practice, this would be an epsilon correction. Not worth adding the extra code complexity.
     # calculate ratio between charge within 10ns of pulse and total charge.
@@ -237,9 +239,9 @@ def get_first_regular_pulse(pulses, t1, q_tot, crit_delta=10, crit_ratio = 2.e-3
         q_veto -= charge[i]
 
     return time[i]
+'''
 
-
-def get_first_regular_pulse2(pulses, t1, q_tot, crit_delta=10, crit_ratio = 5.e-3, crit_charge=100.):
+def get_first_regular_pulse(pulses, t1, q_tot, crit_delta=10, crit_ratio = 5.e-3, crit_charge=100.):
     # technically, if we do remove early pulses, one could correct the total charge.
     # in practice, this would be an epsilon correction. Not worth adding the extra code complexity.
     # calculate ratio of charge within 10ns and 75ns of hit.
