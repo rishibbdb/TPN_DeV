@@ -94,7 +94,7 @@ class I3SimBatchHandlerFtr:
 
         pulse_data = []
         meta_data = []
-        n_doms_max = 0
+        self.n_doms_max = 0
         for i in range(self.n_events):
             meta, pulses = sim_handler.get_event_data(i)
             event_data = sim_handler.get_per_dom_summary_from_sim_data(meta, pulses)
@@ -109,10 +109,10 @@ class I3SimBatchHandlerFtr:
 
             pulse_data.append(x)
             meta_data.append(y)
-            if x.shape[0] > n_doms_max:
-                n_doms_max = x.shape[0]
+            if x.shape[0] > self.n_doms_max:
+                self.n_doms_max = x.shape[0]
 
-        n_doms_max += 1
+        self.n_doms_max += 1
         pulse_data_tf = tf.ragged.constant(pulse_data, ragged_rank=1, dtype=tf.float64)
         meta_data_tf = tf.constant(meta_data, dtype=tf.float64)
 
@@ -123,7 +123,7 @@ class I3SimBatchHandlerFtr:
             _element_length_funct = lambda x, y: tf.shape(x)[0]
             ds = ds.bucket_by_sequence_length(
                         element_length_func = _element_length_funct,
-                        bucket_boundaries = [n_doms_max],
+                        bucket_boundaries = [self.n_doms_max],
                         bucket_batch_sizes = [self.batch_size, 1],
                         drop_remainder = False,
                         pad_to_bucket_boundary=True
