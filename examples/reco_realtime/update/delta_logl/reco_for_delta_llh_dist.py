@@ -170,7 +170,7 @@ for event_id in event_ids:
     )
 
     batch_size = 100 # process in smaller batches if a bright events kills GPU memory. (20 works for all events on RTX 4090)
-    batch_maker = I3SimBatchHandlerFtr(sim_handler)
+    batch_maker = I3SimBatchHandlerFtr(sim_handler, remove_pre_pulses=False)
 
     # the events will have been padded to the same length as the one with the highest n_doms.
     batch_iter = batch_maker.get_batch_iterator()
