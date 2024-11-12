@@ -80,41 +80,58 @@ class I3SimHandler:
 
 class I3SimBatchHandlerFtr:
     @tf.autograph.experimental.do_not_convert
-    def __init__(self, sim_handler, process_n_events=None, batch_size=256):
+    def __init__(self, sim_handler, process_n_events=None, batch_size=100, n_seq_len_bins=1, remove_pre_pulses=False):
         self.sim_handler = sim_handler
         self.n_events = len(sim_handler.events_meta)
         self.batch_size = batch_size
         if process_n_events is not None:
-            self.n_events = process_n_events
+            if process_n_events > self.n_events:
+                print(f"Warning: we only process {self.n_events} events, which is all there is in the file."
+                "Set a reasonable value for process_n_events to avoid this warning.")
+
+            else:
+                self.n_events = process_n_events
 
         pulse_data = []
         meta_data = []
         n_doms_max = 0
         for i in range(self.n_events):
-            ev, meta = self._get_event_data(i)
-            pulse_data.append(ev)
-            meta_data.append(meta)
-            if ev.shape[0] > n_doms_max:
-                n_doms_max = ev.shape[0]
+            meta, pulses = sim_handler.get_event_data(i)
+            event_data = sim_handler.get_per_dom_summary_from_sim_data(meta, pulses)
+            if remove_pre_pulses:
+                sim_handler.replace_early_pulse(event_data, pulses)
+
+            x = event_data[['x', 'y','z','time', 'charge']].to_numpy()
+            y = meta[['muon_energy_at_detector', 'q_tot', 'muon_zenith', 'muon_azimuth', 'muon_time',
+                      'muon_pos_x', 'muon_pos_y', 'muon_pos_z', 'spline_mpe_zenith',
+                      'spline_mpe_azimuth', 'spline_mpe_time', 'spline_mpe_pos_x',
+                      'spline_mpe_pos_y', 'spline_mpe_pos_z']].to_numpy()
+
+            pulse_data.append(x)
+            meta_data.append(y)
+            if x.shape[0] > n_doms_max:
+                n_doms_max = x.shape[0]
 
         n_doms_max += 1
         pulse_data_tf = tf.ragged.constant(pulse_data, ragged_rank=1, dtype=tf.float64)
         meta_data_tf = tf.constant(meta_data, dtype=tf.float64)
 
         # TF's batch by sequence length magic
-        #n_bins = 25
-        n_bins = 1
-        ds = tf.data.Dataset.from_tensor_slices((pulse_data_tf, meta_data_tf))
-        ds = ds.map(lambda x, y: (x, y))
-        _element_length_funct = lambda x, y: tf.shape(x)[0]
-        ds = ds.bucket_by_sequence_length(
-                    element_length_func = _element_length_funct,
-                    bucket_boundaries = np.logspace(1, np.log10(n_doms_max), n_bins+1).astype(int).tolist(),
-                    bucket_batch_sizes = [self.batch_size]*(n_bins+2),
-                    drop_remainder = False,
-                    pad_to_bucket_boundary=False
-                    # pad_to_bucket_boundary=True
-                )
+        if n_seq_len_bins == 1:
+            ds = tf.data.Dataset.from_tensor_slices((pulse_data_tf, meta_data_tf))
+            ds = ds.map(lambda x, y: (x, y))
+            _element_length_funct = lambda x, y: tf.shape(x)[0]
+            ds = ds.bucket_by_sequence_length(
+                        element_length_func = _element_length_funct,
+                        bucket_boundaries = [n_doms_max],
+                        bucket_batch_sizes = [self.batch_size, 1],
+                        drop_remainder = False,
+                        pad_to_bucket_boundary=True
+                    )
+
+        else:
+            raise NotImplementedError("Parameters for a smart seqlen binning remain to be added."
+                    "For now we simply create batches up to max number of DOMs. I.e. choose n_seq_len_bins=1.")
 
         self.tf_dataset = ds
 
