@@ -161,8 +161,12 @@ def get_vertex_seeds(seed, direction):
     """
     #v_ax = jnp.array([-30.0, -15.0, 15.0, 30.0])
     #r_ax = jnp.array([15.0, 30.0])
+
     v_ax = jnp.array([10.0 , 20.0])
     r_ax = jnp.array([15.0])
+
+    #v_ax = jnp.array([-40.0, 40.0])
+    #r_ax = jnp.array([150.])
     ang_steps = 3
 
     theta, phi = direction[0], direction[1]
