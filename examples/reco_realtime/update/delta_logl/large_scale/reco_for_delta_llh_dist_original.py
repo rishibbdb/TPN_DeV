@@ -42,8 +42,6 @@ event_ids = ['1022', '10393', '10644', '10738', '11086', '11232', '13011',
        '65472', '6586', '8', '8604', '8674', '8840', '9410', '9419',
        '9505']
 
-sigma = 0.7
-
 # set up likelihood for batched processing
 neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
 
@@ -161,8 +159,8 @@ def reconstruct_one_batch(data, meta_data):
 # Let's finally do some work.
 for event_id in event_ids:
     print("working on event:", event_id)
-    bp = '/home/storage2/hans/i3files/alerts/bfrv2/filter_prepulse/charge_corr_dist/'
-    tfrecord = os.path.join(bp, f'event_{event_id}_N100_merged_w_energy_loss_preds_from_0_to_10_1st_pulse_sigma_{sigma:.1f}.tfrecord')
+    bp = '/home/storage2/hans/i3files/alerts/bfrv2/'
+    tfrecord = os.path.join(bp, f'event_{event_id}_N100_from_0_to_10_1st_pulse.tfrecord')
 
     batch_size = 100 # let's load all events in one go to determine what's the max number of doms hit across all events.
     n_bins = 1
@@ -184,7 +182,7 @@ for event_id in event_ids:
 
     # reload batch iterator with correct max_doms value
     # but smaller batch size. This avoids recompilation between batches.
-    batch_size = 25
+    batch_size = 20
     batch_maker = I3SimBatchHandlerTFRecord(tfrecord,
                                             n_bins=n_bins,
                                             bucket_batch_sizes=[batch_size] * (n_bins+2),
@@ -226,10 +224,10 @@ for event_id in event_ids:
 
     best_x = results[:, 3:5]
 
-    np.save(f"results/sigma_{sigma:.1f}/llh_results_event_{event_id}_padded_input", llh_results)
-    np.save(f"results/sigma_{sigma:.1f}/mincoords_event_{event_id}_padded_input", best_x/scale_rad)
-    np.save(f"results/sigma_{sigma:.1f}/truecoords_event_{event_id}_padded_input", event_meta_data[:, 2:4])
-    np.save(f"results/sigma_{sigma:.1f}/splinempecoords_event_{event_id}_padded_input", event_meta_data[:, 8:10])
+    np.save(f"results/original/llh_results_event_{event_id}_padded_input", llh_results)
+    np.save(f"results/original/mincoords_event_{event_id}_padded_input", best_x/scale_rad)
+    np.save(f"results/original/truecoords_event_{event_id}_padded_input", event_meta_data[:, 2:4])
+    np.save(f"results/original/splinempecoords_event_{event_id}_padded_input", event_meta_data[:, 8:10])
 
 
 
