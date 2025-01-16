@@ -1,5 +1,4 @@
 from lib.gupta import c_multi_gupta_mpe_logprob_midpoint2_stable_v
-from lib.gupta import _multi_gupta_spe_prob_large_sigma_fine_v
 import jax
 import jax.numpy as jnp
 from jax.scipy.stats.norm import pdf as norm_pdf
@@ -43,30 +42,17 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
                     sigma)
 
 
-        mix_probs = jnp.exp(log_mix_probs)
-        log_noise_probs = jnp.log(c_multi_gupta_spe_prob_large_sigma_fine_v(delay_time,
-                mix_probs,
-                av,
-                bv,
-                sigma_noise))
-
-        #log_noise_probs = norm_logpdf(delay_time, (av[:, 2]-1)/bv[:, 2], scale=sigma_noise*3)
-        #noise_probs = norm_pdf(delay_time, 0.0, scale=sigma_noise)
-
-        noise_charge = jnp.array(0.005)
         log_floor_df = jnp.log(jnp.array(1./6000.))
-        floor_weight = jnp.array(0.001)
-        noise_weight = jnp.array(0.01)
+        floor_weight = jnp.array(1.e-20)
 
         log_probs = jnp.concatenate([
                                         jnp.expand_dims(log_physics_probs, axis=0),
-                                        jnp.expand_dims(log_noise_probs, axis=0),
-                                        jnp.expand_dims(jnp.ones_like(log_noise_probs) * log_floor_df, axis=0)
+                                        jnp.expand_dims(jnp.ones_like(log_physics_probs) * log_floor_df, axis=0)
                                     ],
                                     axis=0
                                 )
 
-        weight = jnp.expand_dims(jnp.array([1.0-floor_weight-noise_weight, noise_weight, floor_weight]), axis=1)
+        weight = jnp.expand_dims(jnp.array([1.0-floor_weight, floor_weight]), axis=1)
 
         return -2.0 * jnp.sum(jax.scipy.special.logsumexp(log_probs, 0, weight))
 

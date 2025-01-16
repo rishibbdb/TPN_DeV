@@ -25,12 +25,22 @@ transform_network_inputs_v = jax.jit(jax.vmap(transform_network_inputs, 0, 0))
 
 
 def transform_network_outputs(x):
-    a = 1+20*jax.nn.sigmoid(x[3:6]) + 1.e-30
+    a = 1.+20.*jax.nn.sigmoid(x[3:6]) + 1.e-20
     b = 2.0*jax.nn.sigmoid(x[6:9])
     logits = x[0:3]
     return logits, a, b
 
 transform_network_outputs_v = jax.jit(jax.vmap(transform_network_outputs, 0, 0))
+
+
+def transform_network_outputs_gupta(x):
+    eps = 1.e-20
+    a = 1.0 + jnp.exp(x[3:6]) + eps
+    b = 1.0 / (1.e4*jax.nn.sigmoid(x[6:9]) + 0.1)
+    logits = x[0:3]
+    return logits, a, b
+
+transform_network_outputs_gupta_v = jax.jit(jax.vmap(transform_network_outputs_gupta, 0, 0))
 
 """
 use transform_network_inputs and _outputs instead.
