@@ -1,5 +1,5 @@
 from lib.gupta import c_multi_gupta_mpe_logprob_midpoint2_stable_v
-from lib.c_spe_gamma import c_multi_gamma_spe_prob_large_sigma_fine_v
+from lib.gupta import c_multi_gupta_spe_prob_large_sigma_fine_v
 
 import jax
 import jax.numpy as jnp
@@ -48,7 +48,7 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
 
 
         mix_probs = jnp.exp(log_mix_probs)
-        log_noise_probs = jnp.log(c_multi_gamma_spe_prob_large_sigma_fine_v(delay_time,
+        log_noise_probs = jnp.log(c_multi_gupta_spe_prob_large_sigma_fine_v(delay_time,
                 mix_probs,
                 av,
                 bv,

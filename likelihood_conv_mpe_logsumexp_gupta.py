@@ -1,5 +1,4 @@
 from lib.gupta import c_multi_gupta_mpe_logprob_midpoint2_stable_v
-from lib.c_spe_gamma import c_multi_gamma_spe_prob_large_sigma_fine_v
 import jax
 import jax.numpy as jnp
 from jax.scipy.stats.norm import pdf as norm_pdf
