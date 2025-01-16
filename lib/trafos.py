@@ -26,7 +26,7 @@ transform_network_inputs_v = jax.jit(jax.vmap(transform_network_inputs, 0, 0))
 
 def transform_network_outputs(x):
     a = 1.+20.*jax.nn.sigmoid(x[3:6]) + 1.e-20
-    b = 5.0*jax.nn.sigmoid(x[6:9])
+    b = 2.0*jax.nn.sigmoid(x[6:9])
     logits = x[0:3]
     return logits, a, b
 
