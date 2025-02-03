@@ -4,11 +4,11 @@ from icecube import dataio, dataclasses
 import pandas as pd
 import numpy as np
 
-from lib.geo import __theta_cherenkov
-__theta_cherenkov_deg = np.rad2deg(__theta_cherenkov)
+#from lib.geo import __theta_cherenkov
+#__theta_cherenkov_deg = np.rad2deg(__theta_cherenkov)
 
 
-def get_pulse_info(frame, event_id, pulses_key = 'TWSRTHVInIcePulsesIC'):
+def get_pulse_info(frame, event_id, pulses_key = 'TWSRTHVInIcePulsesIC', correction_key = None):
     """
     Generates a dictionary containing all pulses for this event.
     """
@@ -28,13 +28,19 @@ def get_pulse_info(frame, event_id, pulses_key = 'TWSRTHVInIcePulsesIC'):
             string_idx = omkey.string - 1
             sensor_idx = string_idx * 60 + om_idx
 
+            # deal with possibility of charge correction
+            correction = 1.0
+            if correction_key is not None:
+                correction = frame[correction_key][omkey]
+
             for i, pulse in enumerate(om_pulses):
                  n_pulses += 1
                  time = pulse.time
                  charge = pulse.charge
                  is_HLC = int(pulse.flags & dataclasses.I3RecoPulse.PulseFlags.LC)
+
                  if is_HLC:
-                    q_tot += charge
+                    q_tot += charge * correction
                     if not omkey in hlc_doms:
                         hlc_doms.add(omkey)
 
