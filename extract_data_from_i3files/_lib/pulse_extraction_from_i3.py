@@ -36,11 +36,11 @@ def get_pulse_info(frame, event_id, pulses_key = 'TWSRTHVInIcePulsesIC', correct
             for i, pulse in enumerate(om_pulses):
                  n_pulses += 1
                  time = pulse.time
-                 charge = pulse.charge
+                 charge = pulse.charge * correction
                  is_HLC = int(pulse.flags & dataclasses.I3RecoPulse.PulseFlags.LC)
 
                  if is_HLC:
-                    q_tot += charge * correction
+                    q_tot += charge
                     if not omkey in hlc_doms:
                         hlc_doms.add(omkey)
 
