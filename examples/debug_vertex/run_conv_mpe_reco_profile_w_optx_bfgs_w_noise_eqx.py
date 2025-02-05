@@ -47,8 +47,9 @@ event_index = int(sys.argv[1])
 
 # Get network and eval logic.
 dtype = jnp.float64
-#eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/photondata/gupta/naive/w_penalty/cache/test_penalties_tree_start_epoch_70.eqx', dtype=dtype)
+
 eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/github/data/gupta/n96_w_penalty_1.e-3/new_model_no_penalties_tree_start_epoch_260.eqx', dtype=dtype, n_hidden=96)
+#eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/github/data/gupta/n48_no_penalty/new_model_no_penalties_tree_start_epoch_800.eqx', dtype=dtype, n_hidden=48)
 eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=jnp.float64, gupta=True)
 
 # Get an IceCube event.
@@ -62,8 +63,9 @@ bp = '/home/storage2/hans/i3files/alerts/bfrv2/NN_corrections/ftr/'
 #                              os.path.join(bp, 'pulses_ds_21217_from_35000_to_53530.ftr'),
 #                              '/home/storage/hans/jax_reco_new/data/icecube/detector_geometry.csv')
 
-sim_handler = I3SimHandler(os.path.join(bp, 'meta_ds_data_event_11086_w_NN_correction.ftr'),
-                                os.path.join(bp, 'pulses_ds_data_event_11086_w_NN_correction.ftr'),
+event_id = 11086
+sim_handler = I3SimHandler(os.path.join(bp, f'meta_ds_data_event_{event_id}_w_NN_correction.ftr'),
+                                os.path.join(bp, f'pulses_ds_data_event_{event_id}_w_NN_correction.ftr'),
                                 '/home/storage/hans/jax_reco_new/data/icecube/detector_geometry.csv')
 
 meta, pulses = sim_handler.get_event_data(event_index)
@@ -294,6 +296,6 @@ ct = plt.contour(np.rad2deg(X), np.rad2deg(Y), delta_logl, levels=contours, line
 
 plt.legend()
 plt.tight_layout()
-plt.savefig(f"mpe_scan_ev_11086_{event_index}_w_noise_eqx.png", dpi=300)
+plt.savefig(f"mpe_scan_ev_{event_id}_{event_index}_w_noise_small_eqx.png", dpi=300)
 
 
