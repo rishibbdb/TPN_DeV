@@ -227,8 +227,18 @@ def make_event_plot(event_id):
     sigma = 3.0
     delta = 0.1
 
-    c_multi_gamma_mpe_prob_midpoint2_vx = jax.vmap(c_multi_gamma_mpe_prob_midpoint2, (0, None, None, None, None, None), 0)
-    c_multi_gupta_spe_prob_vx = jax.vmap(c_multi_gupta_spe_prob, (0, None, None, None, None), 0)
+    def get_binned_charge(qtot):
+        qmin, qmax = 0.99*np.min(qtot), 1.01*np.max(qtot)
+        edges = np.linspace(qmin, qmax, 11)
+        counts, _ = np.histogram(qtot, bins=edges)
+        counts = counts / len(qtot)
+        centers = 0.5 * (edges[1:] + edges[:-1])
+        centers = jnp.clip(centers, min=1.0)
+        return counts, centers
+
+    c_multi_gamma_mpe_prob_midpoint2_vx = jax.jit(jax.vmap(c_multi_gamma_mpe_prob_midpoint2, (0, None, None, None, None, None), 0))
+    c_multi_gamma_mpe_prob_midpoint2_vx_vn = jax.jit(jax.vmap(c_multi_gamma_mpe_prob_midpoint2_vx, (None, None, None, None, 0, None), 0))
+    c_multi_gupta_spe_prob_vx = jax.jit(jax.vmap(c_multi_gupta_spe_prob, (0, None, None, None, None), 0))
 
     for i in range(0, min(100, len(dom_positions)), n_doms_per_page):
             print(i)
@@ -256,8 +266,13 @@ def make_event_plot(event_id):
                 for k in range(3):
                     tax = ax[j, k]
                     if k == 0:
-                        n_p_tmp = jnp.clip(n_p_orig, max = 3000.0)
-                        yval2 = c_multi_gamma_mpe_prob_midpoint2_vx(xvals, g_mix_p, g_a, g_b, n_p_tmp, sigma)
+                        #n_p_tmp = jnp.clip(n_p_orig, max = 3000.0)
+                        #yval2 = c_multi_gamma_mpe_prob_midpoint2_vx(xvals, g_mix_p, g_a, g_b, n_p_tmp, sigma)
+
+                        weights, centers = get_binned_charge(dom_data[pos]['q_tot'])
+                        yval2 = c_multi_gamma_mpe_prob_midpoint2_vx_vn(xvals, g_mix_p, g_a, g_b, centers, sigma)
+                        yval2 = jnp.sum(yval2 * np.expand_dims(weights, axis=1), axis=0)
+
                         norm2 = np.sum(yval2) * (xvals[1] - xvals[0])
                         tax.plot(xvals, yval2, label=f'MPE PDF (approx), q={n_p_orig}', color='black', linestyle='solid', lw=1)
                         tax.set_ylim([0.0, 1.2*np.amax([np.amax(yval2) / norm2])])
@@ -286,7 +301,7 @@ def make_event_plot(event_id):
                         tax.hist(dom_data[pos]['pulse_time'], bins=np.linspace(tmin, 2000, 200),
                                 weights=dom_data[pos]['pulse_charge'], density = True, label='all pulses')
 
-                        xvals = np.linspace(tmin, tmax, 3000)
+                        xvals = np.linspace(tmin, 1.5*tmax, 3000)
                         yval2 = c_multi_gupta_spe_prob_vx(xvals, g_mix_p, g_a, g_b, sigma)
                         tax.plot(xvals, yval2, label=f'SPE PDF', color='black', linestyle='solid', lw=1)
                         tax.set_xlabel('delay time [ns]')
