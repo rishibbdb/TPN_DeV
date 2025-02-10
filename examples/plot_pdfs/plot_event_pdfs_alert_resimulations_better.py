@@ -21,6 +21,7 @@ from lib.gupta_network_eqx import get_network_eval_v_fn
 from lib.geo import cherenkov_cylinder_coordinates_w_rho_v
 from lib.geo import get_xyz_from_zenith_azimuth
 from lib.gupta import c_multi_gupta_mpe_prob_midpoint2 as c_multi_gamma_mpe_prob_midpoint2
+from lib.gupta import c_multi_gupta_spe_prob
 from lib.plotting import adjust_plot_1d
 
 from dom_track_eval import get_eval_network_doms_and_track
@@ -35,24 +36,24 @@ eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/github/data/gup
 eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=dtype, gupta=True)
 
 event_ids = [12547,
- 	53129,
- 	29183,
- 	17424,
- 	10145,
- 	47271,
- 	39474,
- 	34495,
- 	49730,
- 	48963,
- 	59593,
- 	35147,
- 	54227,
- 	8789,
- 	51931,
- 	5352,
- 	49010,
- 	56061,
- 	37503
+    53129,
+    29183,
+    17424,
+    10145,
+    47271,
+    39474,
+    34495,
+    49730,
+    48963,
+    59593,
+    35147,
+    54227,
+    8789,
+    51931,
+    5352,
+    49010,
+    56061,
+    37503
 ]
 
 def make_event_plot(event_id):
@@ -71,6 +72,8 @@ def make_event_plot(event_id):
     hit_t = []
     hit_t_orig = []
     hit_q = []
+    hit_all_t = []
+    hit_all_q = []
 
     early_pulse_info = defaultdict(list)
     ct = 0
@@ -130,6 +133,17 @@ def make_event_plot(event_id):
         hit_z.append(event_data['z'].values)
         hit_q.append(event_data_orig['charge'].values)
 
+        _tmp_hit_t = []
+        _tmp_hit_q = []
+        for s_id in event_data['sensor_id'].values:
+            idx = pulses['sensor_id'] == s_id
+            pulses_this_dom = pulses[idx]
+            _tmp_hit_t.append(pulses_this_dom['time'].values - track_time)
+            _tmp_hit_q.append(pulses_this_dom['charge'].values)
+
+        hit_all_q.append(_tmp_hit_q)
+        hit_all_t.append(_tmp_hit_t)
+
     dom_data = defaultdict(lambda: defaultdict(list))
 
     for i in range(len(hit_x)):
@@ -148,6 +162,9 @@ def make_event_plot(event_id):
             dom_data[(x,y,z)]['first_hit_time_orig'].append(t_orig)
             dom_data[(x,y,z)]['q_tot'].append(q)
             dom_data[(x,y,z)]['sensor_id'].append(sid)
+            for k, t in enumerate(hit_all_t[i][j]):
+                dom_data[(x,y,z)]['pulse_time'].append(t)
+                dom_data[(x,y,z)]['pulse_charge'].append(hit_all_q[i][j][k])
 
     for key in dom_data.keys():
         qs = dom_data[key]['q_tot']
@@ -186,6 +203,9 @@ def make_event_plot(event_id):
             dom_data[pos]['first_hit_time'][j] -= float(gt)
             dom_data[pos]['first_hit_time_orig'][j] -= float(gt)
 
+        for j in range(len(dom_data[pos]['pulse_time'])):
+            dom_data[pos]['pulse_time'][j] -= float(gt)
+
         dom_data[pos]['closest_approach_dist'] = closest_approach_dist[i]
         dom_data[pos]['closest_approach_rho'] = closest_approach_rho[i]
         dom_data[pos]['closest_approach_z'] = closest_approach_z[i]
@@ -207,7 +227,18 @@ def make_event_plot(event_id):
     sigma = 3.0
     delta = 0.1
 
-    c_multi_gamma_mpe_prob_midpoint2_vx = jax.vmap(c_multi_gamma_mpe_prob_midpoint2, (0, None, None, None, None, None), 0)
+    def get_binned_charge(qtot):
+        qmin, qmax = 0.99*np.min(qtot), 1.01*np.max(qtot)
+        edges = np.linspace(qmin, qmax, 11)
+        counts, _ = np.histogram(qtot, bins=edges)
+        counts = counts / len(qtot)
+        centers = 0.5 * (edges[1:] + edges[:-1])
+        centers = jnp.clip(centers, min=1.0)
+        return counts, centers
+
+    c_multi_gamma_mpe_prob_midpoint2_vx = jax.jit(jax.vmap(c_multi_gamma_mpe_prob_midpoint2, (0, None, None, None, None, None), 0))
+    c_multi_gamma_mpe_prob_midpoint2_vx_vn = jax.jit(jax.vmap(c_multi_gamma_mpe_prob_midpoint2_vx, (None, None, None, None, 0, None), 0))
+    c_multi_gupta_spe_prob_vx = jax.jit(jax.vmap(c_multi_gupta_spe_prob, (0, None, None, None, None), 0))
 
     for i in range(0, min(100, len(dom_positions)), n_doms_per_page):
             print(i)
@@ -220,7 +251,7 @@ def make_event_plot(event_id):
                 mode = (g_a[1]-1)/g_b[1]
 
                 plot_min = np.max([-50, np.min([np.min(dom_data[pos]['first_hit_time']), -25])])
-                xvals = np.linspace(plot_min, np.max([1.5 * np.percentile(dom_data[pos]['first_hit_time'], [95])[0], 20]), 3000)
+                xvals = np.linspace(plot_min, np.max([1.5 * np.percentile(dom_data[pos]['first_hit_time'], [95])[0], 50]), 3000)
 
                 dist = dom_data[pos]['closest_approach_dist']
                 z = dom_data[pos]['closest_approach_z']
@@ -234,9 +265,14 @@ def make_event_plot(event_id):
 
                 for k in range(3):
                     tax = ax[j, k]
-                    if k == 0 or k == 1:
-                        n_p_tmp = jnp.clip(n_p_orig, max = 3000.0)
-                        yval2 = c_multi_gamma_mpe_prob_midpoint2_vx(xvals, g_mix_p, g_a, g_b, n_p_tmp, sigma)
+                    if k == 0:
+                        #n_p_tmp = jnp.clip(n_p_orig, max = 3000.0)
+                        #yval2 = c_multi_gamma_mpe_prob_midpoint2_vx(xvals, g_mix_p, g_a, g_b, n_p_tmp, sigma)
+
+                        weights, centers = get_binned_charge(dom_data[pos]['q_tot'])
+                        yval2 = c_multi_gamma_mpe_prob_midpoint2_vx_vn(xvals, g_mix_p, g_a, g_b, centers, sigma)
+                        yval2 = jnp.sum(yval2 * np.expand_dims(weights, axis=1), axis=0)
+
                         norm2 = np.sum(yval2) * (xvals[1] - xvals[0])
                         tax.plot(xvals, yval2, label=f'MPE PDF (approx), q={n_p_orig}', color='black', linestyle='solid', lw=1)
                         tax.set_ylim([0.0, 1.2*np.amax([np.amax(yval2) / norm2])])
@@ -245,11 +281,8 @@ def make_event_plot(event_id):
                         tax.set_ylabel('pdf')
 
                         if k == 0:
-                            time_key = 'first_hit_time_orig'
-                            tax.set_title(f"event {event_id} (dist={dist:.1f}m, z ={z:.0f}m, rho={np.rad2deg(rho):.0f}deg)", fontsize=6)
-                        else:
                             time_key = 'first_hit_time'
-                            tax.set_title("after pre-pulse cleaning", fontsize=6)
+                            tax.set_title(f"event {event_id} (dist={dist:.1f}m, z ={z:.0f}m, rho={np.rad2deg(rho):.0f}deg)", fontsize=6)
 
                         plot_min = np.max([-50, np.min([np.min(dom_data[pos][time_key]), -25])])
                         for tx in dom_data[pos][time_key]:
@@ -262,7 +295,25 @@ def make_event_plot(event_id):
                         tax.legend(fontsize=4)
                         tax.set_xlim([plot_min, np.max([20, 1.5 * np.percentile(dom_data[pos]['first_hit_time'], [95])[0]])])
 
-                    if k == 2:
+                    elif k == 1:
+                        tmin = -25.
+                        tmax = np.max(dom_data[pos]['pulse_time'])
+                        tax.hist(dom_data[pos]['pulse_time'], bins=np.linspace(tmin, 2000, 200),
+                                weights=dom_data[pos]['pulse_charge'], density = True, label='all pulses')
+
+                        xvals = np.linspace(tmin, 1.5*tmax, 3000)
+                        yval2 = c_multi_gupta_spe_prob_vx(xvals, g_mix_p, g_a, g_b, sigma)
+                        tax.plot(xvals, yval2, label=f'SPE PDF', color='black', linestyle='solid', lw=1)
+                        tax.set_xlabel('delay time [ns]')
+                        tax.set_ylabel('pdf')
+
+
+                        tax.set_xlim([tmin, 1.2*np.percentile(dom_data[pos]['pulse_time'], [95], weights=dom_data[pos]['pulse_charge'], method='inverted_cdf')[0]])
+                        tax.set_ylim(ymin=1.e-4)
+                        tax.set_yscale('log')
+                        tax.legend(fontsize=6)
+
+                    elif k == 2:
                         tax.hist(dom_data[pos]['q_tot'], color='tab:blue', histtype='step', lw=2)
                         tax.hist(dom_data[pos]['q_tot'], color='tab:blue', alpha=0.5)
                         tax.axvline(dom_data[pos]['mean_q_tot'], alpha=0.5, color='black', lw=1)
@@ -279,7 +330,6 @@ def make_event_plot(event_id):
     return
 
 for e_id in event_ids:
-
         make_event_plot(e_id)
 
 
