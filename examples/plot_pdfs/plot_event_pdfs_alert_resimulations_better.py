@@ -1,6 +1,6 @@
 import sys, os
-sys.path.insert(0, "/home/storage/hans/jax_reco_gupta_corrections")
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+sys.path.insert(0, "/home/storage/hans/jax_reco_gupta_corrections2")
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 from collections import defaultdict
 
@@ -20,6 +20,7 @@ from lib.simdata_i3 import I3SimHandler
 from lib.gupta_network_eqx import get_network_eval_v_fn
 from lib.geo import cherenkov_cylinder_coordinates_w_rho_v
 from lib.geo import get_xyz_from_zenith_azimuth
+from lib.geo import impact_angle_cos_eta_v
 from lib.gupta import c_multi_gupta_mpe_prob_midpoint2 as c_multi_gamma_mpe_prob_midpoint2
 from lib.gupta import c_multi_gupta_spe_prob
 from lib.plotting import adjust_plot_1d
@@ -194,6 +195,8 @@ def make_event_plot(event_id):
                                              track_pos,
                                              track_dir_xyz)
 
+    cos_eta = impact_angle_cos_eta_v(dom_pos, track_pos, track_dir_xyz)
+
     # convert first_hit_times to delay_times by subtracting geo_times
     # and add more dom data to dom_data dict
     for i in range(len(dom_pos)):
@@ -209,6 +212,7 @@ def make_event_plot(event_id):
         dom_data[pos]['closest_approach_dist'] = closest_approach_dist[i]
         dom_data[pos]['closest_approach_rho'] = closest_approach_rho[i]
         dom_data[pos]['closest_approach_z'] = closest_approach_z[i]
+        dom_data[pos]['cos_eta'] = cos_eta[i]
         dom_data[pos]['mix_probs'] = np.array(mix_probs[i])
         dom_data[pos]['a'] = np.array(av[i])
         dom_data[pos]['b'] = np.array(bv[i])
@@ -256,6 +260,7 @@ def make_event_plot(event_id):
                 dist = dom_data[pos]['closest_approach_dist']
                 z = dom_data[pos]['closest_approach_z']
                 rho = dom_data[pos]['closest_approach_rho']
+                cos_eta = dom_data[pos]['cos_eta']
 
                 sid = dom_data[pos]['sensor_id']
 
@@ -311,6 +316,7 @@ def make_event_plot(event_id):
                         tax.set_xlim([tmin, 1.2*np.percentile(dom_data[pos]['pulse_time'], [95], weights=dom_data[pos]['pulse_charge'], method='inverted_cdf')[0]])
                         tax.set_ylim(ymin=1.e-4)
                         tax.set_yscale('log')
+                        tax.set_title(f"impact angle cos_eta={cos_eta:.2f}", fontsize=6)
                         tax.legend(fontsize=6)
 
                     elif k == 2:
