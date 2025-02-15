@@ -338,7 +338,6 @@ def impact_angle_cos_eta(dom_pos, track_pos, track_dir):
 
     # distance muon travels from track vertex to point of closest approach.
     ds = jnp.dot(v_a, track_dir)
-    print("distance the muon travels:", ds)
 
     # a vector parallel track with length ds
     ds_v = ds * track_dir
@@ -346,22 +345,18 @@ def impact_angle_cos_eta(dom_pos, track_pos, track_dir):
     # vector closest approach position to dom yields closest approach distance
     v_d = v_a - ds_v
     dc = jnp.linalg.norm(v_d)
-    print("closest approach distance:", dc)
 
     # distance that the photon travels
     dt = dc / __sin_theta_cherenkov
-    print("the photon travels:", dt)
 
     # distance emission point to closest approach point
     dx = dc / __tan_theta_cherenkov
 
     # distance vertex to emission point
     dy = ds - dx
-    print("distance vertex to emission point:", dy)
 
     # z component of emission point
     z_emission = track_pos[2] + dy * track_dir[2]
-    print("z component of emission point:", z_emission)
 
     # cos eta
     return (dom_pos[2] - z_emission) / dt
