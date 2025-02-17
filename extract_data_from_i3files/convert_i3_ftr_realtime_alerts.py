@@ -39,7 +39,7 @@ parser.add_argument("-s", "--file_index_start", type=int,
                   help="start index of range of files to be converted (included)")
 
 parser.add_argument("-e", "--file_index_end", type=int,
-                  default=100,
+                  default=10,
                   dest="FILE_INDEX_END",
                   help="end index of range of files to be converted (excluded)")
 
