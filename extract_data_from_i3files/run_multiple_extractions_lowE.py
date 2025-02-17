@@ -9,9 +9,21 @@ event_ids = [12547, 53129, 29183, 17424, 10145,
  				5352, 49010, 56061, 37503]
 
 def start_process(argument_dict):
-    script_path = '/home/storage/hans/jax_reco_gupta_corrections/extract_data_from_i3files/convert_i3_ftr_lowE.py'
+    #script_path = '/home/storage/hans/jax_reco_gupta_corrections2/extract_data_from_i3files/convert_i3_ftr_lowE.py'
+    script_path = '/home/storage/hans/jax_reco_gupta_corrections2/extract_data_from_i3files/convert_i3_tfrecord_lowE.py'
     cmd = ['python']
     cmd.append(f"{script_path}")
+
+    #indir = "/home/storage2/hans/i3files/lowE/i3/"
+    #outdir = "/home/storage2/hans/i3files/lowE/tfrecord/"
+
+    indir = "/home/storage2/hans/i3files/lowE/bfrv2_no_holeice_flat/i3_nominal/"
+    outdir = "/home/storage2/hans/i3files/lowE/bfrv2_no_holeice_flat/tfrecord/"
+
+    cmd.append("--indir")
+    cmd.append(f"{indir}")
+    cmd.append("--outdir")
+    cmd.append(f"{outdir}")
 
     for key in argument_dict.keys():
         val = argument_dict[key]
