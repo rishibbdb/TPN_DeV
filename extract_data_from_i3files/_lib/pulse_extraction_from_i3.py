@@ -8,7 +8,7 @@ import numpy as np
 #__theta_cherenkov_deg = np.rad2deg(__theta_cherenkov)
 
 
-def get_pulse_info(frame, event_id, pulses_key = 'TWSRTHVInIcePulsesIC', correction_key = None):
+def get_pulse_info(frame, event_id, pulses_key = 'TWSRTHVInIcePulsesIC', correction_key = None, geo_frame = None, calibrate = False):
     """
     Generates a dictionary containing all pulses for this event.
     """
@@ -21,6 +21,12 @@ def get_pulse_info(frame, event_id, pulses_key = 'TWSRTHVInIcePulsesIC', correct
 
     hlc_doms = set([])
     for omkey, om_pulses in pulses.items():
+            light_scale = 1.0
+            if geo_frame is not None and calibrate == True:
+                cal = geo_frame['I3Calibration'].dom_cal[omkey]
+                light_scale = dataclasses.mean_spe_charge(cal)
+                light_scale *= cal.relative_dom_eff
+
             n_channel += 1
 
             # assign sensor index
@@ -36,7 +42,7 @@ def get_pulse_info(frame, event_id, pulses_key = 'TWSRTHVInIcePulsesIC', correct
             for i, pulse in enumerate(om_pulses):
                  n_pulses += 1
                  time = pulse.time
-                 charge = pulse.charge * correction
+                 charge = pulse.charge * correction / light_scale
                  is_HLC = int(pulse.flags & dataclasses.I3RecoPulse.PulseFlags.LC)
 
                  if is_HLC:
