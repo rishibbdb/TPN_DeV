@@ -3,6 +3,8 @@
 from icecube import dataio, dataclasses
 import pandas as pd
 import numpy as np
+from scipy.stats import norm
+from scipy.special import erf
 
 #from lib.geo import __theta_cherenkov
 #__theta_cherenkov_deg = np.rad2deg(__theta_cherenkov)
@@ -59,6 +61,127 @@ def get_pulse_info(frame, event_id, pulses_key = 'TWSRTHVInIcePulsesIC', correct
 
     summary = {'n_pulses': n_pulses, 'n_channel': n_channel, 'n_channel_HLC': len(hlc_doms), 'q_tot': q_tot}
     return data, summary
+
+
+def get_pulse_info_fudged_mcpe(frame,
+                            event_id,
+                            pulses_key = 'TWSRTHVInIcePulsesIC',
+                            mcpe_key = 'I3MCPESeriesMapWithoutNoise',
+                            correction_key = None,
+                            geo_frame = None,
+                            calibrate = False):
+    """
+    Generates a dictionary containing all pulses for this event.
+    The times are taken from downsampled MCPE (keyword: CompensationFactor).
+    Charges are taken from original pulses.
+    Only uses DOMs for which both: pulses and MCPE exist.
+    """
+
+    mcpe_map = frame[mcpe_key]
+    pmap = dataclasses.I3RecoPulseSeriesMap.from_frame(frame, pulses_key)
+
+    n_pulses = 0
+    n_channel = 0
+    q_tot = 0.0
+
+    data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[]}
+
+    hlc_doms = set([])
+    for omkey, om_hits in mcpe_map.items():
+        if not omkey in pmap.keys():
+            # Skip dom's that do not exist in reco pulses
+            continue
+
+        om_pulses = pmap[omkey]
+        light_scale = 1.0
+        cal = geo_frame['I3Calibration'].dom_cal[omkey]
+        light_scale = dataclasses.mean_spe_charge(cal)
+        light_scale *= cal.relative_dom_eff
+        dom_q_tot = 0
+
+        n_channel += 1
+
+        om_idx = omkey.om - 1
+        string_idx = omkey.string - 1
+        sensor_idx = string_idx * 60 + om_idx
+
+        # deal with possibility of charge correction
+        correction = 1.0
+        if correction_key is not None:
+            correction = frame[correction_key][omkey]
+
+        # compute total charge
+        for i, pulse in enumerate(om_pulses):
+            charge = pulse.charge * correction / light_scale
+            dom_q_tot += charge
+
+            is_HLC = int(pulse.flags & dataclasses.I3RecoPulse.PulseFlags.LC)
+
+            if is_HLC:
+               q_tot += charge
+               if not omkey in hlc_doms:
+                   hlc_doms.add(omkey)
+
+        # resample MCPE times (assuming that a fraction falls below discriminator
+        # and therefore can't contribute as first pulse)
+        spe_parameters = cal.combined_spe_charge_distribution
+        args = dict()
+        args['e1_amp'] = spe_parameters.exp1_amp
+        args['e2_amp'] = spe_parameters.exp2_amp
+        args['w1'] = spe_parameters.exp1_width
+        args['w2'] = spe_parameters.exp2_width
+        args['g_amp'] = spe_parameters.gaus_amp
+        args['g_mean'] = spe_parameters.gaus_mean
+        args['g_width'] = spe_parameters.gaus_width
+
+        Qd = 0.2325
+        frac = 1. - spe_cdf(Qd, args)
+        #print(frac)
+
+        # deal with merged npe by flattening them into series with npe=1
+        #flat_om_times = [p.time for p in om_hits]
+        flat_om_times = []
+        for p in om_hits:
+            for _ in range(p.npe):
+                flat_om_times.append(p.time)
+
+        # bound size between 1 and numper of original pulses.
+        size = min(len(flat_om_times), np.round(frac * len(flat_om_times)))
+        size = max(size, 1.0)
+        size = int(size)
+        times = np.random.choice(flat_om_times, size=size, replace=False)
+        times.sort()
+
+        # uncomment to take original pulses
+        #size = len(flat_om_times)
+        #times = flat_om_times
+
+        # and we need to account for fudged charge from pulses
+        # such that we preserve total charge.
+        avg_pulse_q = dom_q_tot / size
+
+        # store fudged data
+        for i in range(size):
+            n_pulses += 1
+            data['event_id'].append(event_id)
+            data['time'].append(times[i])
+            data['charge'].append(avg_pulse_q)
+            data['sensor_id'].append(sensor_idx)
+            data['is_HLC'].append(is_HLC)
+
+    summary = {'n_pulses': n_pulses, 'n_channel': n_channel, 'n_channel_HLC': len(hlc_doms), 'q_tot': q_tot}
+    return data, summary
+
+def spe_cdf(x, args):
+    e1_amp = args['e1_amp']
+    e2_amp = args['e2_amp']
+    w1 = args['w1']
+    w2 = args['w2']
+    g_amp = args['g_amp']
+    g_mean = args['g_mean']
+    g_width = args['g_width']
+
+    return e1_amp * (w1 - np.exp(-x/w1)*w1) + e2_amp * (w2 - np.exp(-x/w2)*w2) + g_amp * np.sqrt(np.pi/2) * g_width * (erf(g_mean/(np.sqrt(2)*g_width))-erf((g_mean-x)/(np.sqrt(2)*g_width)))
 
 
 #def asym_gaussian(diff, sigma, r):
