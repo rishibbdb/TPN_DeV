@@ -37,8 +37,7 @@ def log1m_exp(x):
 
     return jnp.where(
         oob,
-        #-jnp.exp(crit_oob),
-        crit_oob,
+        -jnp.exp(crit_oob),
         jnp.where(
             mask,
             more_val,
