@@ -63,6 +63,62 @@ def get_pulse_info(frame, event_id, pulses_key = 'TWSRTHVInIcePulsesIC', correct
     return data, summary
 
 
+def get_pulse_info_mcpe(frame,
+                        event_id,
+                        mcpe_key = 'I3MCPESeriesMapWithoutNoise',
+                        pulses_key = 'TWSRTHVInIcePulsesIC',
+                        correction_key = None):
+    """
+    DO NOT USE UNLESS YOU KNOW WHAT YOU ARE DOING.
+    """
+
+    mcpe_map = frame[mcpe_key]
+    pmap = dataclasses.I3RecoPulseSeriesMap.from_frame(frame, pulses_key)
+
+    n_pulses = 0
+    n_channel = 0
+    q_tot = 0.0
+
+    data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[]}
+
+    hlc_doms = set([])
+    for omkey, om_hits in mcpe_map.items():
+        # these are MCPE. HLC is not defined (only for actual pulses).
+        # we treat every hit as HLC.
+        if not omkey in pmap.keys():
+            # Skip dom's that do not exist in reco pulses
+            continue
+
+        hlc_doms.add(omkey)
+
+        n_channel += 1
+
+        om_idx = omkey.om - 1
+        string_idx = omkey.string - 1
+        sensor_idx = string_idx * 60 + om_idx
+
+        # deal with possibility of charge correction
+        correction = 1.0
+        if correction_key is not None:
+            correction = frame[correction_key][omkey]
+
+        # store fudged data
+        for p in om_hits:
+            n_pulses += 1
+            charge = float(p.npe) * correction
+            data['event_id'].append(event_id)
+            # radomize with 3ns gaussian
+            data['time'].append(p.time)
+            #data['time'].append(p.time)
+            data['charge'].append(charge)
+            data['sensor_id'].append(sensor_idx)
+            data['is_HLC'].append(1)
+            q_tot += charge
+
+    summary = {'n_pulses': n_pulses, 'n_channel': n_channel, 'n_channel_HLC': len(hlc_doms), 'q_tot': q_tot}
+    return data, summary
+
+
 def get_pulse_info_fudged_mcpe(frame,
                             event_id,
                             pulses_key = 'TWSRTHVInIcePulsesIC',
@@ -75,6 +131,7 @@ def get_pulse_info_fudged_mcpe(frame,
     The times are taken from downsampled MCPE (keyword: CompensationFactor).
     Charges are taken from original pulses.
     Only uses DOMs for which both: pulses and MCPE exist.
+    DO NOT USE UNLESS YOU KNOW WHAT YOU ARE DOING.
     """
 
     mcpe_map = frame[mcpe_key]
