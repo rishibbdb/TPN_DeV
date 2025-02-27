@@ -61,6 +61,22 @@ def sf(x, a, b):
 def pdf(x, a, b):
     return a*b*jnp.power(1.-jnp.exp(-b*x), a-1) * jnp.exp(-b*x)
 
+def multi_gupta_pdf(x, mix_probs, a, b):
+    x = jnp.expand_dims(x, axis=0)
+    a = jnp.expand_dims(a, axis=-1)
+    b = jnp.expand_dims(b, axis=-1)
+    mix_probs = jnp.expand_dims(mix_probs, axis=-1)
+    pdf_vals = pdf(x, a, b)
+    return jnp.squeeze(jnp.sum(mix_probs * pdf_vals, axis=0))
+
+def multi_gupta_cdf(x, mix_probs, a, b):
+    x = jnp.expand_dims(x, axis=0)
+    a = jnp.expand_dims(a, axis=-1)
+    b = jnp.expand_dims(b, axis=-1)
+    mix_probs = jnp.expand_dims(mix_probs, axis=-1)
+    cdf_vals = cdf(x, a, b)
+    return jnp.squeeze(jnp.sum(mix_probs * cdf_vals, axis=0))
+
 
 def c_multi_gupta_mpe_logprob_midpoint2_stable(x, log_mix_probs, a, b, n, sigma=3.0):
     """
