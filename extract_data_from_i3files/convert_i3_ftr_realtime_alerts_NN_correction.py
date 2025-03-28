@@ -14,17 +14,17 @@ from argparse import ArgumentParser
 parser = ArgumentParser()
 
 parser.add_argument("-id", "--indir", type=str,
-                  default="/home/storage2/hans/i3files/alerts/bfrv2/energy_loss_network_inputs/pickle/w_correction_factor",
+                  default="/home/storage2/hans/i3files/alerts/ftp-v1_flat/energy_loss_network_inputs/npe/i3/w_correction/",
                   dest="INDIR",
                   help="directory containing the .i3 files")
 
 parser.add_argument("-ib", "--infile_base", type=str,
-                  default="data_event_8604",
+                  default="data_event_8840",
                   dest="INFILE_BASE",
                   help="part of filename that is common to all .i3 files")
 
 parser.add_argument("-is", "--infile_suffix", type=str,
-                  default="w_correction_factor.i3.zst",
+                  default=".i3.zst",
                   dest="INFILE_SUFFIX",
                   help="suffix of .i3 files. Typically .i3.zst")
 
@@ -34,7 +34,7 @@ parser.add_argument("-did", "--dataset_id", type=int,
                   help="ID of IceCube dataset")
 
 parser.add_argument("-o", "--outdir", type=str,
-                  default="/home/storage2/hans/i3files/alerts/bfrv2/NN_corrections/ftr/",
+                  default="/home/storage2/hans/i3files/alerts/ftp-v1_flat/energy_loss_network_inputs/npe/ftr/w_corrections/",
                   dest="OUTDIR",
                   help="directory where to write output feather files")
 
@@ -85,7 +85,7 @@ else:
 
 # collect all existing files
 infiles = []
-infile = os.path.join(indir, f"{infile_base}_{infile_suffix}")
+infile = os.path.join(indir, f"{infile_base}{infile_suffix}")
 infiles.append(infile)
 print(infiles)
 
@@ -102,6 +102,9 @@ event_count = 0
 
 for infile in infiles:
     # main loop
+    if not os.path.exists(infile):
+        continue
+
     f = dataio.I3File(infile)
     pulse_data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[]}
 

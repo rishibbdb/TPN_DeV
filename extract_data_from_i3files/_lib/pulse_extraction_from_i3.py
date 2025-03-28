@@ -38,8 +38,9 @@ def get_pulse_info(frame, event_id, pulses_key = 'TWSRTHVInIcePulsesIC', correct
 
             # deal with possibility of charge correction
             correction = 1.0
-            if correction_key is not None:
-                correction = frame[correction_key][omkey]
+            if correction_key is not None and frame.Has(correction_key):
+                if omkey in frame[correction_key].keys():
+                    correction = frame[correction_key][omkey]
 
             for i, pulse in enumerate(om_pulses):
                  n_pulses += 1

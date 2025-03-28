@@ -7,13 +7,16 @@ from lib.geo import get_xyz_from_zenith_azimuth
 from lib.trafos import transform_network_outputs_v, transform_network_inputs_v
 
 
-def get_eval_network_doms_and_track(eval_network_v_fn, dtype=jnp.float64, gupta=False):
+def get_eval_network_doms_and_track(eval_network_v_fn, dtype=jnp.float64, gupta=False, n_comp=3):
     """
     network eval function (vectorized across doms)
     """
 
-    if gupta:
+    if gupta and n_comp == 3:
         from lib.trafos import transform_network_outputs_gupta_v as transform_network_outputs_v
+
+    if gupta and n_comp == 4:
+        from lib.trafos import transform_network_outputs_gupta_4comp_v as transform_network_outputs_v
 
     @jax.jit
     def eval_network_doms_and_track(dom_pos, track_vertex, track_dir):
