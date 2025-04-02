@@ -10,11 +10,11 @@ sys.path.insert(0, "/home/storage/hans/jax_reco_gupta_corrections3/")
 
 import tensorflow as tf
 
-from _lib.pulse_extraction_from_i3 import get_pulse_info
+from _lib.pulse_extraction_from_i3 import get_pulse_info_mcpe as get_pulse_info
 from _lib.tfrecords_utils import serialize_example
 from lib.simdata_i3 import I3SimHandler
 
-
+from scipy.stats import truncnorm
 
 from argparse import ArgumentParser
 
@@ -41,7 +41,7 @@ parser.add_argument("-did", "--dataset_id", type=int,
                   help="ID of IceCube dataset")
 
 parser.add_argument("-o", "--outdir", type=str,
-                  default="/home/storage2/hans/i3files/alerts/ftp-v1_flat/energy_loss_network_inputs/npe/tfrecords/filter_prepulse/",
+                  default="/home/storage2/hans/i3files/alerts/ftp-v1_flat/energy_loss_network_inputs/npe/tfrecords/npe/corrected/",
                   dest="OUTDIR",
                   help="directory where to write output feather files")
 
@@ -282,16 +282,16 @@ with tf.io.TFRecordWriter(write_path, options) as writer:
     for i in range(len(df_meta)):
         meta, pulses = sim_handler.get_event_data(i)
 
-        # Get dom locations, first hit times, and total charges (for each dom).
-        event_data = sim_handler.get_per_dom_summary_from_sim_data(meta, pulses)
-        # Remove early pulses.
-        sim_handler.replace_early_pulse(event_data, pulses)
+        event_data = sim_handler.get_per_dom_summary_from_sim_data(meta, pulses, correct_charge=True)
 
         x = event_data[['x', 'y','z','time', 'charge']].to_numpy()
         y = meta[['muon_energy_at_detector', 'q_tot', 'muon_zenith', 'muon_azimuth', 'muon_time',
                       'muon_pos_x', 'muon_pos_y', 'muon_pos_z', 'spline_mpe_zenith',
                       'spline_mpe_azimuth', 'spline_mpe_time', 'spline_mpe_pos_x',
                       'spline_mpe_pos_y', 'spline_mpe_pos_z']].to_numpy()
+
+        s = 2.5
+        x[:, 3] = x[:, 3] + 3.0 * truncnorm.rvs(-s, s, size=len(x))
 
         writer.write(serialize_example(
                                 tf.constant(x, dtype=tf.float64),

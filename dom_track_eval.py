@@ -50,10 +50,10 @@ def get_eval_network_doms_and_track(eval_network_v_fn, dtype=jnp.float64, gupta=
         logits, av, bv = transform_network_outputs_v(y_pred)
 
         # Cast to float64. Likelihoods need double precision.
-        logits = jnp.array(logits, dtype=jnp.float64)
-        av = jnp.array(av, dtype=jnp.float64)
-        bv = jnp.array(bv, dtype=jnp.float64)
-        geo_time = jnp.array(geo_time, dtype=jnp.float64)
+        logits = jnp.array(logits, dtype=dtype)
+        av = jnp.array(av, dtype=dtype)
+        bv = jnp.array(bv, dtype=dtype)
+        geo_time = jnp.array(geo_time, dtype=dtype)
 
         return logits, av, bv, geo_time
 
@@ -99,10 +99,10 @@ def get_eval_network_doms_and_track_w_charge(eval_network_v_fn, eval_charge_netw
         predicted_charge = eval_charge_network_v_fn(x_prime)
 
         # Cast to float64. Likelihoods need double precision.
-        logits = jnp.array(logits, dtype=jnp.float64)
-        av = jnp.array(av, dtype=jnp.float64)
-        bv = jnp.array(bv, dtype=jnp.float64)
-        geo_time = jnp.array(geo_time, dtype=jnp.float64)
+        logits = jnp.array(logits, dtype=dtype)
+        av = jnp.array(av, dtype=dtype)
+        bv = jnp.array(bv, dtype=dtype)
+        geo_time = jnp.array(geo_time, dtype=dtype)
 
         return logits, av, bv, geo_time, predicted_charge
 

@@ -106,7 +106,7 @@ for infile in infiles:
         continue
 
     f = dataio.I3File(infile)
-    pulse_data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[]}
+    pulse_data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[], 'charge_correction': []}
 
     meta_data = {'event_id': [], 'idx_start': [], 'idx_end': [], 'n_channel_HLC': []}
     meta_data.update({'neutrino_energy': [], 'muon_energy': [], 'muon_energy_at_detector': []})

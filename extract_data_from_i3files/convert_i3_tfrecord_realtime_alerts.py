@@ -41,7 +41,7 @@ parser.add_argument("-did", "--dataset_id", type=int,
                   help="ID of IceCube dataset")
 
 parser.add_argument("-o", "--outdir", type=str,
-                  default="/home/storage2/hans/i3files/alerts/ftp-v1_flat/energy_loss_network_inputs/npe/tfrecords/filter_prepulse/",
+                  default="/home/storage2/hans/i3files/alerts/ftp-v1_flat/energy_loss_network_inputs/npe/tfrecords/original/",
                   dest="OUTDIR",
                   help="directory where to write output feather files")
 
@@ -284,8 +284,6 @@ with tf.io.TFRecordWriter(write_path, options) as writer:
 
         # Get dom locations, first hit times, and total charges (for each dom).
         event_data = sim_handler.get_per_dom_summary_from_sim_data(meta, pulses)
-        # Remove early pulses.
-        sim_handler.replace_early_pulse(event_data, pulses)
 
         x = event_data[['x', 'y','z','time', 'charge']].to_numpy()
         y = meta[['muon_energy_at_detector', 'q_tot', 'muon_zenith', 'muon_azimuth', 'muon_time',
