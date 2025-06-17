@@ -89,28 +89,31 @@ def c_multi_gupta_mpe_logprob_midpoint2_stable(x, log_mix_probs, a, b, n, sigma=
     #eps = 1.e-12
     eps = 1.e-6
 
+    int_scale = 1
+
     x0 = eps
     x_m0 = 0.01
-    xvals0 = jnp.linspace(x0, x_m0, 10)[:-1]
+    xvals0 = jnp.linspace(x0, x_m0, 10 * int_scale)[:-1]
 
     x_m1 = 0.05
-    xvals1 = jnp.linspace(x_m0, x_m1, 10)[:-1]
+    xvals1 = jnp.linspace(x_m0, x_m1, 10 * int_scale)[:-1]
 
     x_m2 = 0.25
-    xvals2 = jnp.linspace(x_m1, x_m2, 10)[:-1]
+    xvals2 = jnp.linspace(x_m1, x_m2, 10 * int_scale)[:-1]
 
     x_m25 = 0.75
-    xvals25 = jnp.linspace(x_m2, x_m25, 10)[:-1]
+    xvals25 = jnp.linspace(x_m2, x_m25, 10 * int_scale)[:-1]
 
     x_m3 = 2.5
-    xvals3 = jnp.linspace(x_m25, x_m3, 10)[:-1]
+    xvals3 = jnp.linspace(x_m25, x_m3, 10 * int_scale)[:-1]
 
     x_m4 = 8.0
-    xvals4 = jnp.linspace(x_m3, x_m4, 20)
+    xvals4 = jnp.linspace(x_m3, x_m4, 20 * int_scale)
 
-    xmin = jnp.max(jnp.array([1.5 * eps, x - 10 * sigma]))
-    xmax = jnp.max(jnp.array([xmin+1.5*eps, x + 10 * sigma]))
-    xvals_x = jnp.linspace(xmin, xmax, 101)
+    xmin = jnp.max(jnp.array([1.5 * eps, x - 10 * sigma * int_scale]))
+    xmax = jnp.max(jnp.array([xmin+1.5*eps, x + 10 * sigma * int_scale]))
+    xvals_x = jnp.linspace(xmin, xmax, 101 * int_scale)
+
     xvals = jnp.sort(jnp.concatenate([xvals0, xvals1, xvals2, xvals25, xvals3, xvals4, xvals_x]))
 
     dx = xvals[1:]-xvals[:-1]

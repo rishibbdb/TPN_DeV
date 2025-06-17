@@ -19,12 +19,13 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
 
         # Constant parameters.
         sigma = jnp.array(3.0) # width of gaussian convolution
-        sigma_noise = jnp.array(1000.0)
+        sigma_noise = jnp.array(1000.0) # currently 1000
 
         dom_pos = event_data[:, :3]
         first_hit_times = event_data[:, 3]
         charges = event_data[:, 4]
-        n_photons = jnp.round(charges + 0.5)
+        n_photons = charges
+        #n_photons = jnp.round(charges + 0.5)
         #n_photons = jnp.clip(n_photons, min=1, max=1000)
         #n_photons = jnp.clip(charges, min=1, max=5000)
 
@@ -53,10 +54,9 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
         #log_noise_probs = norm_logpdf(delay_time, (av[:, 2]-1)/bv[:, 2], scale=sigma_noise*3)
         #noise_probs = norm_pdf(delay_time, 0.0, scale=sigma_noise)
 
-        noise_charge = jnp.array(0.005)
         log_floor_df = jnp.log(jnp.array(1./6000.))
-        floor_weight = jnp.array(0.001)
-        noise_weight = jnp.array(0.01)
+        floor_weight = jnp.array(1.e-4) # to be optimized (so far 0.001)
+        noise_weight = jnp.array(1.e-2) # to be optimized (so far 0.01)
 
         log_probs = jnp.concatenate([
                                         jnp.expand_dims(log_physics_probs, axis=0),

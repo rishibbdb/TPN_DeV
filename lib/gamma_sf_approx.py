@@ -1,6 +1,8 @@
 import jax
 import jax.numpy as jnp
 
+from jax.scipy.special import logsumexp
+
 """
 Fast approximation to lower incomplete gamma function.
 Implementation follows the formulas given in
@@ -113,10 +115,81 @@ def regularized_lower_incomplete_gamma_approx_w_existing_coefficients(x, a, c):
     r2 = w*(1.0-jnp.power(c[3], -x))
     return r1+r2
 
+def gamma_cdf_fast(x, a, b):
+    return jnp.clip(regularized_lower_incomplete_gamma_approx(x*b, a), min=0.0, max=1.0)
 
 def gamma_sf_fast(x, a, b):
     return jnp.clip(1.0-regularized_lower_incomplete_gamma_approx(x*b, a), min=0.0, max=1.0)
 
-
 def gamma_sf_fast_w_existing_coefficients(x, a, b, c):
     return jnp.clip(1.0-regularized_lower_incomplete_gamma_approx_w_existing_coefficients(x*b, a, c), min=0.0, max=1.0)
+
+#def log1mexp(x):
+#    return jnp.where(
+#            x < jnp.log(0.5), jnp.log1p(-jnp.exp(x)), jnp.log(-jnp.expm1(x))
+#    )
+
+def log1mexp(x):
+    """
+    Numerically stable calculation
+    of the quantity log(1 - exp(x)),
+    following the algorithm of
+    Machler [1]. This is
+    the algorithm used in TensorFlow Probability,
+    PyMC, and Stan, but it is not provided
+    yet with Numpyro.
+
+    Currently returns NaN for x > 0,
+    but may be modified in the future
+    to throw a ValueError
+
+    [1] https://cran.r-project.org/web/packages/Rmpfr/vignettes/log1mexp-note.pdf
+    """
+    # return 0. rather than -0. if
+    # we get a negative exponent that exceeds
+    # the floating point representation
+    crit = -0.6931472
+    arr_x = 1.0 * jnp.array(x)
+
+    crit_oob = jnp.log(jnp.finfo(
+        arr_x.dtype).smallest_normal)+5
+    oob = arr_x < crit_oob
+    mask = arr_x > crit
+
+    more_val = jnp.log(-jnp.expm1(jnp.clip(arr_x, min=crit)))
+    less_val = jnp.log1p(-jnp.exp(jnp.clip(arr_x, max=crit)))
+
+    return jnp.where(
+        oob,
+        -jnp.exp(crit_oob),
+        jnp.where(
+            mask,
+            more_val,
+            less_val))
+
+def logW(x, c):
+    x = jnp.clip(c[1] * (x-c[2]), min=-15, max=15)
+    _x = jnp.concatenate([jnp.expand_dims(x, axis=0), jnp.expand_dims(-x, axis=0)],
+                         axis=0)
+    return x - logsumexp(_x, 0)
+
+def log_regularized_lower_incomplete_gamma_approx(x, a):
+    c = c_coeffs(a)
+    lw = logW(x, c) # log W
+    l1mw = log1mexp(lw)  # log (1-W)
+    log_r1 = l1mw - x + a*jnp.log(x) - jax.scipy.special.gammaln(a) + jnp.log((1.0/a +
+                                                                        c[0]*x/(a*(a+1)) +
+                                                                        (c[0]*x)**2/(a*(a+1)*(a+2))))
+    log_r2 = lw + log1mexp(-x * jnp.log(c[3]))
+
+    x = jnp.concatenate([jnp.expand_dims(log_r1, axis=0), jnp.expand_dims(log_r2, axis=0)],
+                        axis=0)
+    return logsumexp(x, 0)
+
+def log_gamma_cdf_fast(x, a, b):
+    return log_regularized_lower_incomplete_gamma_approx(x*b, a)
+
+def log_gamma_sf_fast(x, a, b):
+    return log1mexp(log_gamma_cdf_fast(x, a, b))
+
+

@@ -4,7 +4,7 @@ import jax.numpy as jnp
 from lib.geo import cherenkov_cylinder_coordinates_w_rho_v, cherenkov_cylinder_coordinates_w_rho2_v
 from lib.geo import rho_dom_relative_to_track_v
 from lib.geo import get_xyz_from_zenith_azimuth
-from lib.trafos import transform_network_outputs_v, transform_network_inputs_v
+from lib.trafos import transform_network_inputs_v
 
 
 def get_eval_network_doms_and_track(eval_network_v_fn, dtype=jnp.float64, gupta=False, n_comp=3):
@@ -12,11 +12,16 @@ def get_eval_network_doms_and_track(eval_network_v_fn, dtype=jnp.float64, gupta=
     network eval function (vectorized across doms)
     """
 
+    # the different networks have different output transformations.
+    # so we make conditional imports here.
     if gupta and n_comp == 3:
         from lib.trafos import transform_network_outputs_gupta_v as transform_network_outputs_v
 
-    if gupta and n_comp == 4:
+    elif gupta and n_comp == 4:
         from lib.trafos import transform_network_outputs_gupta_4comp_v as transform_network_outputs_v
+
+    else:
+        from lib.trafos import transform_network_outputs_v
 
     @jax.jit
     def eval_network_doms_and_track(dom_pos, track_vertex, track_dir):
