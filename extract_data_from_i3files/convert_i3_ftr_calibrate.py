@@ -82,7 +82,7 @@ meta_keys['mc_muon_energy_at_interaction'] = 'TrueMuonEnergyAtInteraction'
 meta_keys['mc_muon_energy_at_detector_entry']  = 'TrueMuoneEnergyAtDetectorEntry'
 meta_keys['mc_muon_energy_at_detector_leave'] = 'TrueMuoneEnergyAtDetectorLeave'
 min_muon_energy_at_detector = 1000 # GeV
-max_muon_energy_at_detector = 10000 # GeV
+max_muon_energy_at_detector = 1000000 # GeV
 
 # in old datsets, the background I3MCTree is kept separately
 # from the I3MCTree. Hence checking for coincident events depends
@@ -96,7 +96,7 @@ elif dataset_id in [21217]:
 
 else:
     # assume new datasets by default
-    meta_keys['bg_mc_tree'] = 'I3MCTree'
+    meta_keys['bkg_mc_tree'] = 'I3MCTree'
 
 
 # collect all existing files
