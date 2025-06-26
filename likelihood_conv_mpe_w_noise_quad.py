@@ -1,8 +1,8 @@
-from lib.gupta import c_multi_gupta_mpe_logprob_midpoint2_stable_v
+from lib.gupta import c_multi_gupta_mpe_prob_quad_v
+from lib.gupta import c_multi_gupta_spe_prob_large_sigma_fine_v
 import jax
 import jax.numpy as jnp
 from jax.scipy.stats.norm import pdf as norm_pdf
-from jax.scipy.stats.norm import logpdf as norm_logpdf
 
 def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
     """
@@ -15,46 +15,54 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
                                track_time,
                                event_data):
 
-
         # Constant parameters.
         sigma = jnp.array(3.0) # width of gaussian convolution
         sigma_noise = jnp.array(1000.0)
+        end_of_physics = -jnp.array(1000.0) # when to stop evaluating negative time residuals in units of sigma for physics pdf
 
         dom_pos = event_data[:, :3]
         first_hit_times = event_data[:, 3]
         charges = event_data[:, 4]
         #n_photons = jnp.round(charges + 0.5)
         #n_photons = jnp.clip(n_photons, min=1, max=1000)
-        n_photons = jnp.clip(charges, min=1, max=10000)
+        n_photons = jnp.clip(charges, min=1, max=1000)
 
         logits, av, bv, geo_time = eval_network_doms_and_track_fn(dom_pos, track_vertex, track_direction)
         delay_time = first_hit_times - (geo_time + track_time)
 
         # Floor on negative time residuals.
         # Effectively a floor on the pdf.
+        in_physics_range = delay_time > end_of_physics
+        safe_delay_time = jnp.where(in_physics_range, delay_time, end_of_physics)
 
-        log_mix_probs = jax.nn.log_softmax(logits)
-        log_physics_probs = c_multi_gupta_mpe_logprob_midpoint2_stable_v(delay_time,
-                    log_mix_probs,
+        mix_probs = jax.nn.softmax(logits)
+        physics_probs = c_multi_gupta_mpe_prob_quad_v(
+                    safe_delay_time,
+                    mix_probs,
                     av,
                     bv,
                     n_photons,
-                    sigma)
+                    sigma
+            )
 
 
-        log_floor_df = jnp.log(jnp.array(1./6000.))
-        floor_weight = jnp.array(1.e-2)
+        noise_probs = c_multi_gupta_spe_prob_large_sigma_fine_v(
+                delay_time,
+                mix_probs,
+                av,
+                bv,
+                sigma_noise
+            )
 
-        log_probs = jnp.concatenate([
-                                        jnp.expand_dims(log_physics_probs, axis=0),
-                                        jnp.expand_dims(jnp.ones_like(log_physics_probs) * log_floor_df, axis=0)
-                                    ],
-                                    axis=0
-                                )
+        #noise_probs = norm_pdf(delay_time, (av[:, 1]-1)/bv[:, 1], scale=sigma_noise)
+        #noise_probs = norm_pdf(delay_time, 0.0, scale=sigma_noise)
 
-        weight = jnp.expand_dims(jnp.array([1.0-floor_weight, floor_weight]), axis=1)
+        floor_df = jnp.array(1./6000.)
+        floor_weight = jnp.array(0.001)
+        noise_weight = jnp.array(0.01)
 
-        return -2.0 * jnp.sum(jax.scipy.special.logsumexp(log_probs, 0, weight))
+        return -2.0 * jnp.sum(jnp.log(noise_weight*noise_probs + floor_weight*floor_df + (1.0-noise_weight-floor_weight)*physics_probs))
+
 
     return neg_c_triple_gamma_llh
 
