@@ -1,12 +1,27 @@
 import sys, os
-from argparse import ArgumentParser
+import argparse
 
-parser = ArgumentParser()
+parser = argparse.ArgumentParser()
 
 parser.add_argument("-r", "--path_to_repo", type=str,
                   default="/home/storage/hans/jax_reco_gupta_corrections3/",
                   dest="PATH_TO_REPO",
                   help="directory containing the reco code")
+
+parser.add_argument("-f", "--file_path", type=str,
+                  default="/home/fast_storage/i3/22645/ftr/",
+                  dest="PATH_TO_INPUT",
+                  help="directory containing the event data .ftr files")
+
+parser.add_argument("-mf", "--meta_file", type=str,
+                  default="meta_ds_22645_from_0_to_1000_10_to_100TeV.ftr",
+                  dest="META_FILE_NAME",
+                  help="Name of the .ftr file containing event meta data")
+
+parser.add_argument("-pf", "--pulses_file", type=str,
+                  default="pulses_ds_22645_from_0_to_1000_10_to_100TeV.ftr",
+                  dest="PULSES_FILE_NAME",
+                  help="Name of the .ftr  file containing event pulses data")
 
 parser.add_argument("-g", "--gpu", type=int,
                   default=0,
@@ -18,12 +33,35 @@ parser.add_argument("-e", "--event_index", type=int,
                   dest="EVENT_INDEX",
                   help="Which event should be used. Index within input file.")
 
-parser.add_argument("-n", "--n_splits", type=int,
+parser.add_argument("-ns", "--n_splits", type=int,
                   default=50,
                   dest="N_SPLITS",
                   help="split grid into some number of sequential pieces, to avoid GPU memory limitations")
 
+parser.add_argument("-n", "--network", type=str,
+                  default="gupta_4comp_reg",
+                  dest="NETWORK",
+                  help="options are: gupta_4comp_reg, gupta_4comp, gupta_3comp, gamma_3comp")
+
+parser.add_argument("-s", "--seed", type=str,
+                    default="spline_mpe",
+                    dest="SEED",
+                    help="options are: spline_mpe, truth")
+
+# whether or not to shift the seed such that the vertex
+# corresponds to the charge weighted median time of the event
+parser.add_argument('--center_track_seed', default=True, action=argparse.BooleanOptionalAction)
+
+# whether or not to use multiple vertex seeds: ~factor of 6 slower
+parser.add_argument('--use_multiple_vertex_seeds', default=True, action=argparse.BooleanOptionalAction)
+
+# whether or not to pre-scan the time axis to best-match the seed vertex.
+parser.add_argument('--prescan_time', default=True, action=argparse.BooleanOptionalAction)
+
+
 args = parser.parse_args()
+print(args)
+print("")
 
 # Make code available to python
 sys.path.insert(0, args.PATH_TO_REPO)
@@ -56,18 +94,50 @@ from palettable.cubehelix import Cubehelix
 cx = Cubehelix.make(start=0.3, rotation=-0.5, n=16, reverse=False, gamma=1.0,
      	max_light=1.0,max_sat=0.5, min_sat=1.4).get_mpl_colormap()
 
-# Split grid into sub-grids that are processed sequentially.
-# This can avoid OOM errors if gpu memory is insufficient for entire grid.
-n_splits = args.N_SPLITS
+# Specify the grid.
+dzen = 0.07 # rad
+dazi = 0.07 # rad
+n_eval = 50 # number of grid points per axes
 
-eval_network_v = get_network_eval_v_fn(bpath=os.path.join(path_to_tpn, 'data/gupta/n96_4comp_w_penalty_1.e-4/new_model_no_penalties_tree_start_epoch_1000.eqx'), dtype=dtype, n_hidden=96)
-eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=dtype, gupta=True, n_comp=4)
+# Assume 4-component gupta by default
+n_hidden = 96
+gupta = True
+n_comp = 4
+
+if args.NETWORK == "gupta_4comp_reg":
+    network_path = os.path.join(args.PATH_TO_REPO, 'data/gupta/n96_4comp_w_penalty_1.e-4/new_model_no_penalties_tree_start_epoch_1000.eqx')
+
+elif args.NETWORK == "gupta_4comp":
+    network_path = os.path.join(args.PATH_TO_REPO, 'data/gupta/n96_4comp/new_model_no_penalties_tree_start_epoch_800.eqx')
+
+elif args.NETWORK == "gupta_3comp":
+    # a 3 component gupta needs a different import
+    from lib.gupta_network_eqx import get_network_eval_v_fn
+    n_comp = 3
+    network_path = os.path.join(args.PATH_TO_REPO, 'data/gupta/n96_w_penalty_1.e-3/new_model_no_penalties_tree_start_epoch_260.eqx')
+
+elif args.NETWORK == "gamma_3comp":
+    # a 3 component gamma needs different imports
+    from lib.small_network import get_network_eval_v_fn
+    from likelihood_conv_mpe_w_noise_logsumexp import get_neg_c_triple_gamma_llh
+    n_comp = 3
+    gupta = False
+    network_path = os.path.join(args.PATH_TO_REPO, 'data/small_network')
+
+else:
+    raise NotImplementedError(f"network {args.NETWORK} not implemnted.")
+
+# Network logic.
+eval_network_v = get_network_eval_v_fn(bpath=network_path, dtype=dtype, n_hidden=n_hidden)
+eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=dtype, gupta=gupta, n_comp=n_comp)
 
 # Get an IceCube event.
 #bp = '/home/fast_storage/i3/22645/ftr/'
-sim_handler = I3SimHandler(os.path.join(bp, f'meta_ds_22645_from_0_to_1000_10_to_100TeV.ftr'),
-                                os.path.join(bp, f'pulses_ds_22645_from_0_to_1000_10_to_100TeV.ftr'),
-                                os.path.join(args.PATH_TO_REPO, 'data/icecube/detector_geometry.csv')
+sim_handler = I3SimHandler(
+					os.path.join(args.PATH_TO_INPUT, args.META_FILE_NAME),
+                    os.path.join(args.PATH_TO_INPUT, args.PULSES_FILE_NAME),
+                    os.path.join(args.PATH_TO_REPO, 'data/icecube/detector_geometry.csv')
+				)
 
 meta, pulses = sim_handler.get_event_data(args.EVENT_INDEX)
 print(f"muon energy: {meta['muon_energy_at_detector']/1.e3:.1f} TeV")
@@ -87,18 +157,32 @@ true_azimuth = meta['muon_azimuth']
 true_src = jnp.array([true_zenith, true_azimuth])
 print("true direction:", true_src)
 
-# Use SplineMPE as a seed.
-track_pos = jnp.array([meta['spline_mpe_pos_x'], meta['spline_mpe_pos_y'], meta['spline_mpe_pos_z']])
-track_time = meta['spline_mpe_time']
-track_zenith = meta['spline_mpe_zenith']
-track_azimuth = meta['spline_mpe_azimuth']
-track_src = jnp.array([track_zenith, track_azimuth])
-print("seed direction:", track_src)
+if args.SEED == "spline_mpe":
+    # Use SplineMPE as a seed.
+    track_pos = jnp.array([meta['spline_mpe_pos_x'], meta['spline_mpe_pos_y'], meta['spline_mpe_pos_z']])
+    track_time = meta['spline_mpe_time']
+    track_zenith = meta['spline_mpe_zenith']
+    track_azimuth = meta['spline_mpe_azimuth']
+    track_src = jnp.array([track_zenith, track_azimuth])
 
+elif args.SEED == "truth":
+    track_pos = true_pos
+    track_time = true_time
+    track_zenith = true_zenith
+    track_azimuth = true_azimuth
+    track_src = true_src
+
+else:
+    raise ValueError(f"seed {args.SEED} not available. Use spline_mpe or truth")
+
+print("seed direction:", track_src)
 print("original seed vertex:", track_pos)
-#centered_track_pos, centered_track_time = center_track_pos_and_time_based_on_data(event_data, track_pos, track_time, track_src)
+
 centered_track_pos, centered_track_time = track_pos, track_time
-print("shifted seed vertex:", centered_track_pos)
+if args.center_track_seed:
+    print("shifting seed vertex.")
+    centered_track_pos, centered_track_time = center_track_pos_and_time_based_on_data(event_data, track_pos, track_time, track_src)
+print("seed vertex:", centered_track_pos)
 
 fitting_event_data = jnp.array(event_data[['x', 'y', 'z', 'time', 'charge']].to_numpy())
 print(fitting_event_data.shape)
@@ -107,23 +191,20 @@ print(fitting_event_data.shape)
 neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
 
 # Potential for additional stability via prescanning optimal vertex time
-scan_llh_most_robust = get_scanner(
+scan_llh = get_scanner(
                         neg_llh,
-                        use_multiple_vertex_seeds=True,
-                        prescan_time=True
+                        use_multiple_vertex_seeds=args.use_multiple_vertex_seeds,
+                        prescan_time=args.prescan_time
                     )
-
-# Specify the grid.
-dzen = 0.07
-dazi = 0.07
-n_eval = 50
 
 zenith = jnp.linspace(true_src[0]-dzen, true_src[0]+dazi, n_eval)
 azimuth = jnp.linspace(true_src[1]-dzen, true_src[1]+dazi, n_eval)
 X, Y = jnp.meshgrid(zenith, azimuth)
 
 # Run the scan.
-solution = scan_llh_most_robust(X, Y, track_pos, track_time, fitting_event_data, n_splits)
+# And split grid into sub-grids that are processed sequentially.
+# This can avoid OOM errors if gpu memory is insufficient for entire grid.
+solution = scan_llh(X, Y, track_pos, track_time, fitting_event_data, args.N_SPLITS)
 sol_logl, sol_vertex, sol_time = solution
 logls = sol_logl.reshape(X.shape)
 
