@@ -1,5 +1,6 @@
 from lib.gupta import c_multi_gupta_mpe_logprob_midpoint2_stable_v
 from lib.gupta import c_multi_gupta_spe_prob_large_sigma_fine_v
+from lib.gupta import c_multi_gupta_mpe_logprob_midpoint2_stable_large_sigma_v
 
 import jax
 import jax.numpy as jnp
@@ -54,6 +55,13 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn, n_comp=3):
                 av,
                 bv,
                 sigma_noise))
+
+        #log_noise_probs =  c_multi_gupta_mpe_logprob_midpoint2_stable_large_sigma_v(delay_time,
+        #        log_mix_probs,
+        #        av,
+        #        bv,
+        #        n_photons,
+        #        sigma_noise)
 
         log_floor_df = jnp.log(jnp.array(1./6000.))
         floor_weight = jnp.array(0.001)

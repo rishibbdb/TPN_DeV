@@ -55,8 +55,9 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
         #noise_probs = norm_pdf(delay_time, 0.0, scale=sigma_noise)
 
         log_floor_df = jnp.log(jnp.array(1./6000.))
-        floor_weight = jnp.array(1.e-4) # to be optimized (so far 0.001)
+        floor_weight = jnp.array(1.e-3) # to be optimized (so far 0.001)
         noise_weight = jnp.array(1.e-2) # to be optimized (so far 0.01)
+
 
         log_probs = jnp.concatenate([
                                         jnp.expand_dims(log_physics_probs, axis=0),
@@ -68,11 +69,20 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
 
         weight = jnp.expand_dims(jnp.array([1.0-floor_weight-noise_weight, noise_weight, floor_weight]), axis=1)
 
+
+        # skip noise weights
+        #log_probs = jnp.concatenate(
+        #    [
+        #        jnp.expand_dims(log_physics_probs, axis=0),
+        #        jnp.expand_dims(jnp.ones_like(log_noise_probs) * log_floor_df, axis=0)
+        #    ],
+        #    axis=0
+        #)
+        #weight = jnp.expand_dims(jnp.array([1.0-floor_weight, floor_weight]), axis=1)
+
         return -2.0 * jnp.sum(jax.scipy.special.logsumexp(log_probs, 0, weight))
 
     return neg_c_triple_gamma_llh
-
-
 
 def get_llh_and_grad_fs_for_iminuit_migrad(eval_network_doms_and_track):
     """
