@@ -11,8 +11,8 @@ from jax.scipy.special import logsumexp
 
 from lib.gamma_sf_approx import gamma_sf_fast, c_coeffs, gamma_sf_fast_w_existing_coefficients, log_gamma_sf_fast
 
-from tensorflow_probability.substrates import jax as tfp
-tfd = tfp.distributions
+#from tensorflow_probability.substrates import jax as tfp
+#tfd = tfp.distributions
 
 def c_multi_gamma_mpe_prob_midpoint2(x, mix_probs, a, b, n, sigma=3.0):
     """
@@ -74,29 +74,29 @@ def c_multi_gamma_mpe_prob_midpoint2(x, mix_probs, a, b, n, sigma=3.0):
 c_multi_gamma_mpe_prob_midpoint2_v = jax.vmap(c_multi_gamma_mpe_prob_midpoint2, (0, 0, 0, 0, 0, None), 0)
 
 
-def mpe_pdf_no_conv(x, mix_probs, a, b, n):
-    g_pdf = tfd.MixtureSameFamily(
-                  mixture_distribution=tfd.Categorical(
-                      probs=mix_probs
-                      ),
-                  components_distribution=tfd.Gamma(
-                    concentration=a,
-                    rate=b,
-                    force_probs_to_zero_outside_support=True
-                      )
-    )
-    return n * g_pdf.prob(x) * jnp.power(g_pdf.survival_function(x), n-1.0)
-
-
-def combine(x, mix_probs, a, b, n, sigma):
-    eps = jnp.array(1.e-12)
-    crit = jnp.array(40.0)
-    x_safe = jnp.where(x < eps, eps, x)
-    probs_no_conv = mpe_pdf_no_conv(x_safe, mix_probs, a, b, n)
-    probs_conv = c_multi_gamma_mpe_prob_midpoint2(x, mix_probs, a, b, n, sigma)
-    return jnp.where(x < crit, probs_conv, probs_no_conv)
-
-c_multi_gamma_mpe_prob_combined_v = jax.vmap(combine, (0, 0, 0, 0, 0, None), 0)
+#def mpe_pdf_no_conv(x, mix_probs, a, b, n):
+#    g_pdf = tfd.MixtureSameFamily(
+#                  mixture_distribution=tfd.Categorical(
+#                      probs=mix_probs
+#                      ),
+#                  components_distribution=tfd.Gamma(
+#                    concentration=a,
+#                    rate=b,
+#                    force_probs_to_zero_outside_support=True
+#                      )
+#    )
+#    return n * g_pdf.prob(x) * jnp.power(g_pdf.survival_function(x), n-1.0)
+#
+#
+#def combine(x, mix_probs, a, b, n, sigma):
+#    eps = jnp.array(1.e-12)
+#    crit = jnp.array(40.0)
+#    x_safe = jnp.where(x < eps, eps, x)
+#    probs_no_conv = mpe_pdf_no_conv(x_safe, mix_probs, a, b, n)
+#    probs_conv = c_multi_gamma_mpe_prob_midpoint2(x, mix_probs, a, b, n, sigma)
+#    return jnp.where(x < crit, probs_conv, probs_no_conv)
+#
+#c_multi_gamma_mpe_prob_combined_v = jax.vmap(combine, (0, 0, 0, 0, 0, None), 0)
 
 
 def c_multi_gamma_mpe_logprob_midpoint2(x, log_mix_probs, a, b, n, sigma=3.0):

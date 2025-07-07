@@ -1,5 +1,5 @@
 import sys, os
-sys.path.insert(0, "/home/storage/hans/jax_reco_gupta_softplus")
+sys.path.insert(0, "/home/storage/hans/jax_reco_gupta_corrections3")
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 from collections import defaultdict
@@ -18,10 +18,12 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 from lib.simdata_i3 import I3SimHandler
 
-from lib.smallest_network_eqx import get_network_eval_v_fn
+
 from lib.geo import cherenkov_cylinder_coordinates_w_rho_v
 from lib.geo import get_xyz_from_zenith_azimuth
-from lib.gupta import c_multi_gupta_mpe_prob_midpoint2, c_multi_gupta_spe_prob
+from lib.gupta_network_eqx_4comp import get_network_eval_v_fn
+from lib.gupta import c_multi_gupta_mpe_prob_midpoint2
+from lib.gupta import c_multi_gupta_spe_prob
 from lib.plotting import adjust_plot_1d
 
 from dom_track_eval import get_eval_network_doms_and_track
@@ -31,8 +33,8 @@ import time
 from collections import defaultdict
 
 dtype = jnp.float64
-eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/photondata/gupta/naive/w_penalty_softplus_large/cache/new_model_no_penalties_tree_start_epoch_260.eqx', dtype=dtype, n_hidden=96)
-eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=dtype)
+eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/photondata/gupta/ftpv1/n96_errscale1_32bit_4comp_update/cache/new_model_no_penalties_tree_start_epoch_800.eqx', dtype=dtype, n_hidden=96)
+eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=dtype, gupta=True, n_comp=4)
 
 event_ids = ['1022', '10393', '10644', '10738', '11086', '11232', '13011',
        '13945', '14017', '14230', '15243', '16416', '16443', '1663',
@@ -52,9 +54,9 @@ event_ids = ['1022', '10393', '10644', '10738', '11086', '11232', '13011',
 
 def make_event_plot(event_id):
     global eval_network_doms_and_track
-    bp = '/home/storage2/hans/i3files/alerts/bfrv2/filter_prepulse/charge_corr_dist/ftr/'
-    sim_handler = I3SimHandler(os.path.join(bp, f'meta_ds_event_{event_id}_N100_from_0_to_100_1st_pulse_charge_correction.ftr'),
-                              os.path.join(bp, f'pulses_ds_event_{event_id}_N100_from_0_to_100_1st_pulse_charge_correction.ftr'),
+    bp = '/home/storage2/hans/i3files/alerts/ftp-v1_flat/ftr/charge/calibrated/'
+    sim_handler = I3SimHandler(os.path.join(bp, f'meta_ds_event_{event_id}_N100_from_0_to_10_1st_pulse.ftr'),
+                              os.path.join(bp, f'pulses_ds_event_{event_id}_N100_from_0_to_10_1st_pulse.ftr'),
                               '/home/storage/hans/jax_reco/data/icecube/detector_geometry.csv')
 
     pdf = PdfPages(f"pdfs_{event_id}.pdf")

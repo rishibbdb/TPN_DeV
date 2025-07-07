@@ -43,7 +43,7 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
 
 
         log_floor_df = jnp.log(jnp.array(1./6000.))
-        floor_weight = jnp.array(1.e-20)
+        floor_weight = jnp.array(1.e-2)
 
         log_probs = jnp.concatenate([
                                         jnp.expand_dims(log_physics_probs, axis=0),

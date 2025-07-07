@@ -43,7 +43,7 @@ def get_network_eval_fn(bpath: str = '../../data/network/', n_layer=7, dtype=jnp
     return eval_network
 
 
-def get_network_eval_v_fn(bpath: str = '../../data/network/', n_layer=7, dtype=jnp.float64):
+def get_network_eval_v_fn(bpath: str = '../../data/network/', n_layer=7, dtype=jnp.float64, n_hidden=None):
     """
     """
     eval_network = get_network_eval_fn(bpath = bpath, n_layer=n_layer, dtype=dtype)

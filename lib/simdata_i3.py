@@ -38,18 +38,23 @@ class I3SimHandler:
     def get_per_dom_summary_from_sim_data(self,
                                           meta: pd.DataFrame,
                                           pulses: pd.DataFrame,
-                                          charge_key='charge') -> pd.DataFrame:
+                                          charge_key='charge',
+                                          correct_charge=False) -> pd.DataFrame:
 
         df_qtot = pulses[['sensor_id', charge_key]].groupby(by=['sensor_id'], as_index=False).sum()
         df_tmin = pulses[['sensor_id', 'time']].groupby(by=['sensor_id'], as_index=False).min()
         df = df_qtot.merge(self.geo.iloc[df_qtot['sensor_id']], on='sensor_id', how='outer')
         df['time'] = df_tmin['time'].values
 
+        if correct_charge == True:
+            df_corr = pulses[['sensor_id', 'charge_correction']].groupby(by=['sensor_id'], as_index=False).mean()
+            df['charge'] = df['charge'].values * df_corr['charge_correction'].values
+
         if charge_key != 'charge':
             df.rename({charge_key: 'charge'}, inplace=True, axis='columns')
         return df
 
-    def get_per_dom_summary_from_index(self, event_index: int, charge_key='charge') -> pd.DataFrame:
+    def get_per_dom_summary_from_index(self, event_index: int, charge_key='charge', correct_charge=False) -> pd.DataFrame:
         #df_qtot = pulses[['sensor_id', charge_key]].groupby(by=['sensor_id'], as_index=False).sum()
         #df_tmin = pulses[['sensor_id', 'time']].groupby(by=['sensor_id'], as_index=False).min()
         #df = df_qtot.merge(self.geo.iloc[df_qtot['sensor_id']], on='sensor_id', how='outer')
@@ -61,7 +66,7 @@ class I3SimHandler:
 
         # avoid duplicating code (see above)
         meta, pulses = self.get_event_data(event_index)
-        return self.get_per_dom_summary_from_sim_data(meta, pulses, charge_key=charge_key)
+        return self.get_per_dom_summary_from_sim_data(meta, pulses, charge_key=charge_key, correct_charge=correct_charge)
 
     def replace_early_pulse(self, summary_data, pulses):
         corrected_time = np.zeros(len(summary_data))

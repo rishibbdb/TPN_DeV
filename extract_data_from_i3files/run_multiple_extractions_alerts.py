@@ -20,7 +20,7 @@ event_ids = ['1022', '10393', '10644', '10738', '11086', '11232', '13011',
        '9505']
 
 def start_process(argument_dict):
-    script_path = '/home/storage/hans/jax_reco_gupta_corrections3/extract_data_from_i3files/convert_i3_tfrecord_realtime_alerts_filter_prepulse.py'
+    script_path = '/home/storage/hans/jax_reco_gupta_corrections3/extract_data_from_i3files/convert_i3_tfrecord_realtime_alerts.py'
     cmd = ['python']
     cmd.append(f"{script_path}")
 

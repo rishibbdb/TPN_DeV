@@ -4,16 +4,24 @@ import jax.numpy as jnp
 from lib.geo import cherenkov_cylinder_coordinates_w_rho_v, cherenkov_cylinder_coordinates_w_rho2_v
 from lib.geo import rho_dom_relative_to_track_v
 from lib.geo import get_xyz_from_zenith_azimuth
-from lib.trafos import transform_network_outputs_v, transform_network_inputs_v
+from lib.trafos import transform_network_inputs_v
 
 
-def get_eval_network_doms_and_track(eval_network_v_fn, dtype=jnp.float64, gupta=False):
+def get_eval_network_doms_and_track(eval_network_v_fn, dtype=jnp.float64, gupta=False, n_comp=3):
     """
     network eval function (vectorized across doms)
     """
 
-    if gupta:
+    # the different networks have different output transformations.
+    # so we make conditional imports here.
+    if gupta and n_comp == 3:
         from lib.trafos import transform_network_outputs_gupta_v as transform_network_outputs_v
+
+    elif gupta and n_comp == 4:
+        from lib.trafos import transform_network_outputs_gupta_4comp_v as transform_network_outputs_v
+
+    else:
+        from lib.trafos import transform_network_outputs_v
 
     @jax.jit
     def eval_network_doms_and_track(dom_pos, track_vertex, track_dir):
@@ -47,10 +55,10 @@ def get_eval_network_doms_and_track(eval_network_v_fn, dtype=jnp.float64, gupta=
         logits, av, bv = transform_network_outputs_v(y_pred)
 
         # Cast to float64. Likelihoods need double precision.
-        logits = jnp.array(logits, dtype=jnp.float64)
-        av = jnp.array(av, dtype=jnp.float64)
-        bv = jnp.array(bv, dtype=jnp.float64)
-        geo_time = jnp.array(geo_time, dtype=jnp.float64)
+        logits = jnp.array(logits, dtype=dtype)
+        av = jnp.array(av, dtype=dtype)
+        bv = jnp.array(bv, dtype=dtype)
+        geo_time = jnp.array(geo_time, dtype=dtype)
 
         return logits, av, bv, geo_time
 
@@ -96,10 +104,10 @@ def get_eval_network_doms_and_track_w_charge(eval_network_v_fn, eval_charge_netw
         predicted_charge = eval_charge_network_v_fn(x_prime)
 
         # Cast to float64. Likelihoods need double precision.
-        logits = jnp.array(logits, dtype=jnp.float64)
-        av = jnp.array(av, dtype=jnp.float64)
-        bv = jnp.array(bv, dtype=jnp.float64)
-        geo_time = jnp.array(geo_time, dtype=jnp.float64)
+        logits = jnp.array(logits, dtype=dtype)
+        av = jnp.array(av, dtype=dtype)
+        bv = jnp.array(bv, dtype=dtype)
+        geo_time = jnp.array(geo_time, dtype=dtype)
 
         return logits, av, bv, geo_time, predicted_charge
 

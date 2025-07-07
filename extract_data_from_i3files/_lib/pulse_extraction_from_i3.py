@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 from scipy.stats import norm
 from scipy.special import erf
+from scipy.stats import truncnorm
 
 #from lib.geo import __theta_cherenkov
 #__theta_cherenkov_deg = np.rad2deg(__theta_cherenkov)
@@ -19,7 +20,7 @@ def get_pulse_info(frame, event_id, pulses_key = 'TWSRTHVInIcePulsesIC', correct
     n_channel = 0
     q_tot = 0.0
 
-    data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[]}
+    data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[], 'charge_correction': []}
 
     hlc_doms = set([])
     for omkey, om_pulses in pulses.items():
@@ -38,13 +39,14 @@ def get_pulse_info(frame, event_id, pulses_key = 'TWSRTHVInIcePulsesIC', correct
 
             # deal with possibility of charge correction
             correction = 1.0
-            if correction_key is not None:
-                correction = frame[correction_key][omkey]
+            if correction_key is not None and frame.Has(correction_key):
+                if omkey in frame[correction_key].keys():
+                    correction = frame[correction_key][omkey]
 
             for i, pulse in enumerate(om_pulses):
                  n_pulses += 1
                  time = pulse.time
-                 charge = pulse.charge * correction / light_scale
+                 charge = pulse.charge / light_scale
                  is_HLC = int(pulse.flags & dataclasses.I3RecoPulse.PulseFlags.LC)
 
                  if is_HLC:
@@ -58,6 +60,7 @@ def get_pulse_info(frame, event_id, pulses_key = 'TWSRTHVInIcePulsesIC', correct
                  data['charge'].append(charge)
                  data['sensor_id'].append(sensor_idx)
                  data['is_HLC'].append(is_HLC)
+                 data['charge_correction'].append(correction)
 
     summary = {'n_pulses': n_pulses, 'n_channel': n_channel, 'n_channel_HLC': len(hlc_doms), 'q_tot': q_tot}
     return data, summary
@@ -79,7 +82,7 @@ def get_pulse_info_mcpe(frame,
     n_channel = 0
     q_tot = 0.0
 
-    data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[]}
+    data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[], 'charge_correction': []}
 
     hlc_doms = set([])
     for omkey, om_hits in mcpe_map.items():
@@ -107,12 +110,11 @@ def get_pulse_info_mcpe(frame,
             n_pulses += 1
             charge = float(p.npe) * correction
             data['event_id'].append(event_id)
-            # radomize with 3ns gaussian
             data['time'].append(p.time)
-            #data['time'].append(p.time)
             data['charge'].append(charge)
             data['sensor_id'].append(sensor_idx)
             data['is_HLC'].append(1)
+            data['charge_correction'].append(correction)
             q_tot += charge
 
     summary = {'n_pulses': n_pulses, 'n_channel': n_channel, 'n_channel_HLC': len(hlc_doms), 'q_tot': q_tot}

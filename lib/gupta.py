@@ -5,6 +5,8 @@ from jax.scipy.stats.norm import pdf as norm_pdf
 from jax.scipy.stats.norm import logpdf as norm_logpdf
 from jax.scipy.special import logsumexp
 
+from quadax import quadgk as jquad
+
 def log1m_exp(x):
     """
     Numerically stable calculation
@@ -89,28 +91,31 @@ def c_multi_gupta_mpe_logprob_midpoint2_stable(x, log_mix_probs, a, b, n, sigma=
     #eps = 1.e-12
     eps = 1.e-6
 
+    int_scale = 1
+
     x0 = eps
     x_m0 = 0.01
-    xvals0 = jnp.linspace(x0, x_m0, 10)[:-1]
+    xvals0 = jnp.linspace(x0, x_m0, 10 * int_scale)[:-1]
 
     x_m1 = 0.05
-    xvals1 = jnp.linspace(x_m0, x_m1, 10)[:-1]
+    xvals1 = jnp.linspace(x_m0, x_m1, 10 * int_scale)[:-1]
 
     x_m2 = 0.25
-    xvals2 = jnp.linspace(x_m1, x_m2, 10)[:-1]
+    xvals2 = jnp.linspace(x_m1, x_m2, 10 * int_scale)[:-1]
 
     x_m25 = 0.75
-    xvals25 = jnp.linspace(x_m2, x_m25, 10)[:-1]
+    xvals25 = jnp.linspace(x_m2, x_m25, 10 * int_scale)[:-1]
 
     x_m3 = 2.5
-    xvals3 = jnp.linspace(x_m25, x_m3, 10)[:-1]
+    xvals3 = jnp.linspace(x_m25, x_m3, 10 * int_scale)[:-1]
 
     x_m4 = 8.0
-    xvals4 = jnp.linspace(x_m3, x_m4, 20)
+    xvals4 = jnp.linspace(x_m3, x_m4, 20 * int_scale)
 
-    xmin = jnp.max(jnp.array([1.5 * eps, x - 10 * sigma]))
-    xmax = jnp.max(jnp.array([xmin+1.5*eps, x + 10 * sigma]))
-    xvals_x = jnp.linspace(xmin, xmax, 101)
+    xmin = jnp.max(jnp.array([1.5 * eps, x - 10 * sigma * int_scale]))
+    xmax = jnp.max(jnp.array([xmin+1.5*eps, x + 10 * sigma * int_scale]))
+    xvals_x = jnp.linspace(xmin, xmax, 101 * int_scale)
+
     xvals = jnp.sort(jnp.concatenate([xvals0, xvals1, xvals2, xvals25, xvals3, xvals4, xvals_x]))
 
     dx = xvals[1:]-xvals[:-1]
@@ -261,3 +266,85 @@ def c_multi_gupta_spe_prob_large_sigma_fine(x, mix_probs, a, b, sigma=1000.):
     return jnp.sum(n_pdf * pdfs * dx)
 
 c_multi_gupta_spe_prob_large_sigma_fine_v = jax.vmap(c_multi_gupta_spe_prob_large_sigma_fine, (0, 0, 0, 0, None), 0)
+
+def multi_gupta_mpe_pdf(x, mix_probs, a, b, n):
+    pdf_vals = multi_gupta_pdf(x, mix_probs, a, b)
+    cdf_vals = multi_gupta_cdf(x, mix_probs, a, b)
+    return n * pdf_vals * jnp.power(1.-cdf_vals, n-1)
+
+def _integrand(x, mix_probs, a, b, n, sigma, t):
+    return norm_pdf(x, loc=t, scale=sigma) * multi_gupta_mpe_pdf(x, mix_probs, a, b, n)
+
+def c_multi_gupta_mpe_prob_quad(x, mix_probs, a, b, n, sigma):
+    # define integration range in units of sigma
+    delta = jnp.array(15) # units of sigma
+    # and stay away from x = 0
+    eps = jnp.array(1.e-12)
+
+    xmax = jnp.max(jnp.array([delta*sigma, x + delta*sigma]))
+    diff = xmax - x
+    xmin = jnp.max(jnp.array([jnp.array(0.0)+eps, x - diff]))
+
+    res = jquad(_integrand,
+                 jnp.array([xmin, 0.1, 1.0, xmax]),
+                 args=(mix_probs, a, b, n, sigma, x),
+                 epsabs=1.e-4,
+                 epsrel=1.e-4,
+                 order=51,
+                 max_ninter=5
+              )[0]
+
+    return res
+
+c_multi_gupta_mpe_prob_quad_v = jax.vmap(c_multi_gupta_mpe_prob_quad, (0, 0, 0, 0, 0, None), 0)
+
+def c_multi_gupta_mpe_logprob_midpoint2_stable_large_sigma(x, log_mix_probs, a, b, n, sigma=3.0):
+    """
+    Q < 30
+    """
+    nmax = 3
+    eps = 1.e-6
+
+    int_scale = 1
+
+    x0 = eps
+    x_m0 = 0.01
+    xvals0 = jnp.linspace(x0, x_m0, 10 * int_scale)[:-1]
+
+    x_m1 = 0.05
+    xvals1 = jnp.linspace(x_m0, x_m1, 10 * int_scale)[:-1]
+
+    x_m2 = 0.25
+    xvals2 = jnp.linspace(x_m1, x_m2, 10 * int_scale)[:-1]
+
+    x_m25 = 0.75
+    xvals25 = jnp.linspace(x_m2, x_m25, 10 * int_scale)[:-1]
+
+    x_m3 = 2.5
+    xvals3 = jnp.linspace(x_m25, x_m3, 10 * int_scale)[:-1]
+
+    x_m4 = 8.0
+    xvals4 = jnp.linspace(x_m3, x_m4, 20 * int_scale)
+
+    xmin = jnp.max(jnp.array([1.5 * eps, x - nmax * sigma * int_scale]))
+    xmax = jnp.max(jnp.array([xmin+1.5*eps, x + nmax * sigma * int_scale]))
+    xvals_x = jnp.linspace(xmin, xmax, 101 * int_scale)
+
+    xvals = jnp.sort(jnp.concatenate([xvals0, xvals1, xvals2, xvals25, xvals3, xvals4, xvals_x]))
+
+    dx = xvals[1:]-xvals[:-1]
+
+    xvals = 0.5*(xvals[:-1]+xvals[1:])
+    log_n_pdf = norm_logpdf(xvals, loc=x, scale=sigma)
+
+    a_e = jnp.expand_dims(a, axis=-1)
+    b_e = jnp.expand_dims(b, axis=-1)
+    log_mix_probs_e = jnp.expand_dims(log_mix_probs, axis=-1)
+
+    xvals_e = jnp.expand_dims(xvals, axis=0)
+    log_pdfs = logsumexp(log_pdf(xvals_e, a_e, b_e) + log_mix_probs_e, 0)
+    log_sfs = logsumexp(log_sf(xvals_e, a_e, b_e) + log_mix_probs_e, 0)
+
+    return logsumexp(log_n_pdf + log_pdfs + (n-1) * log_sfs + jnp.log(dx) + jnp.log(n), 0)
+
+c_multi_gupta_mpe_logprob_midpoint2_stable_large_sigma_v = jax.vmap(c_multi_gupta_mpe_logprob_midpoint2_stable_large_sigma, (0, 0, 0, 0, 0, None), 0)

@@ -6,20 +6,27 @@ import pandas as pd
 import numpy as np
 import glob
 import os, sys
+sys.path.insert(0, "/home/storage/hans/jax_reco_gupta_corrections3/")
 
-from _lib.pulse_extraction_from_i3 import get_pulse_info
+import tensorflow as tf
+
+from _lib.pulse_extraction_from_i3 import get_pulse_info_mcpe as get_pulse_info
+from _lib.tfrecords_utils import serialize_example
+from lib.simdata_i3 import I3SimHandler
+
+from scipy.stats import truncnorm
 
 from argparse import ArgumentParser
 
 parser = ArgumentParser()
 
 parser.add_argument("-id", "--indir", type=str,
-                  default="/home/storage2/hans/i3files/21217/",
+                  default="/home/storage2/hans/i3files/alerts/ftp-v1_flat/energy_loss_network_inputs/npe/i3/w_correction/",
                   dest="INDIR",
                   help="directory containing the .i3 files")
 
 parser.add_argument("-ib", "--infile_base", type=str,
-                  default="wBDT_wDNN_L345_IC86-2016_NuMu",
+                  default="data_event_8840",
                   dest="INFILE_BASE",
                   help="part of filename that is common to all .i3 files")
 
@@ -29,22 +36,12 @@ parser.add_argument("-is", "--infile_suffix", type=str,
                   help="suffix of .i3 files. Typically .i3.zst")
 
 parser.add_argument("-did", "--dataset_id", type=int,
-                  default=21217,
+                  default=0,
                   dest="DATASET_ID",
                   help="ID of IceCube dataset")
 
-parser.add_argument("-s", "--file_index_start", type=int,
-                  default=10000,
-                  dest="FILE_INDEX_START",
-                  help="start index of range of files to be converted (included)")
-
-parser.add_argument("-e", "--file_index_end", type=int,
-                  default=20000,
-                  dest="FILE_INDEX_END",
-                  help="end index of range of files to be converted (excluded)")
-
 parser.add_argument("-o", "--outdir", type=str,
-                  default="/home/storage2/hans/i3files/21217/",
+                  default="/home/storage2/hans/i3files/alerts/ftp-v1_flat/energy_loss_network_inputs/npe/tfrecords/npe/corrected/",
                   dest="OUTDIR",
                   help="directory where to write output feather files")
 
@@ -53,19 +50,13 @@ parser.add_argument('--recompute_true_muon_energy', action='store_true',
 
 args = parser.parse_args()
 
+gcd_file = '/home/storage2/hans/i3files/GeoCalibDetectorStatus_2020.Run134142.Pass2_V0.i3.gz'
+
 dataset_id = args.DATASET_ID
 indir = args.INDIR
 infile_base = args.INFILE_BASE
 infile_suffix = args.INFILE_SUFFIX
-file_index_start = args.FILE_INDEX_START
-file_index_end = args.FILE_INDEX_END
 outdir = args.OUTDIR
-
-# load GCD and find I3Calibration
-g = dataio.I3File('/home/storage2/hans/i3files/GeoCalibDetectorStatus_2020.Run134142.Pass2_V0.i3.gz')
-geo_frame = g.pop_frame()
-while 'I3Calibration' not in geo_frame.keys():
-    geo_frame = g.pop_frame()
 
 if args.RECOMPUTE_MU_E:
     from _lib.muon_energy import add_muon_energy
@@ -81,8 +72,10 @@ meta_keys['spline_mpe'] = 'SplineMPEIC'
 meta_keys['mc_muon_energy_at_interaction'] = 'TrueMuonEnergyAtInteraction'
 meta_keys['mc_muon_energy_at_detector_entry']  = 'TrueMuoneEnergyAtDetectorEntry'
 meta_keys['mc_muon_energy_at_detector_leave'] = 'TrueMuoneEnergyAtDetectorLeave'
-min_muon_energy_at_detector = 1000 # GeV
+min_muon_energy_at_detector = 0 # GeV
 max_muon_energy_at_detector = 1000000 # GeV
+
+pulses_correction_factor_key = meta_keys['pulses'] + "_CorrectionFactors"
 
 # in old datsets, the background I3MCTree is kept separately
 # from the I3MCTree. Hence checking for coincident events depends
@@ -91,7 +84,7 @@ max_muon_energy_at_detector = 1000000 # GeV
 if dataset_id in [21002, 21047, 21124]:
     meta_keys['bkg_mc_tree'] = 'BackgroundI3MCTree_preMuonProp'
 
-elif dataset_id in [21217]:
+elif dataset_id in [21217, 21220]:
     meta_keys['bkg_mc_tree'] = 'BackgroundI3MCTree'
 
 else:
@@ -100,16 +93,27 @@ else:
 
 
 # collect all existing files
-infiles = []
-for file_index in range(file_index_start, file_index_end):
-    infile = os.path.join(indir, f"{infile_base}.{dataset_id:06}.{file_index:06}{infile_suffix}")
-    if os.path.exists(infile):
-        infiles.append(infile)
-    else:
-        infile = os.path.join(indir, f"{infile_base}-{dataset_id:06}-{file_index:06}{infile_suffix}")
-        if os.path.exists(infile):
-            infiles.append(infile)
+#infiles = []
+#infiles.append(os.path.join(indir, f"{infile_base}{infile_suffix}"))
+#print(infiles)
 
+# collect all existing files
+#infiles = []
+#for file_index in range(file_index_start, file_index_end):
+#    infile = os.path.join(indir, f"{infile_base}_Part0{file_index:.0f}{infile_suffix}")
+#    if os.path.exists(infile):
+#        infiles.append(infile)
+#    else:
+#        infile = os.path.join(indir, f"{infile_base}_Part0{file_index:.0f}{infile_suffix}")
+#        if os.path.exists(infile):
+#            infiles.append(infile)
+#
+#print(infiles)
+
+# collect all existing files
+infiles = []
+infile = os.path.join(indir, f"{infile_base}{infile_suffix}")
+infiles.append(infile)
 print(infiles)
 
 print(f"processing {len(infiles)} .i3 files.")
@@ -123,10 +127,14 @@ pulse_frames = []
 
 event_count = 0
 
+g = dataio.I3File(gcd_file)
+geo_frame = g.pop_frame()
+g.close()
+
 for infile in infiles:
     # main loop
     f = dataio.I3File(infile)
-    pulse_data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[]}
+    pulse_data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[], 'charge_correction': []}
 
     meta_data = {'event_id': [], 'idx_start': [], 'idx_end': [], 'n_channel_HLC': []}
     meta_data.update({'neutrino_energy': [], 'muon_energy': [], 'muon_energy_at_detector': []})
@@ -148,8 +156,8 @@ for infile in infiles:
         # Try to read all keys. Skip if something is missing.
         try:
             event_header = frame['I3EventHeader']
-            interaction_type = frame['I3MCWeightDict']['InteractionType']
-            most_energetic_track = frame[meta_keys['mc_most_energetic_muon']] # I3Particle
+            #interaction_type = frame['I3MCWeightDict']['InteractionType']
+            interaction_type = 1.0
             primary_neutrino = frame[meta_keys['mc_primary_neutrino']] # I3Particle
             spline_mpe = frame[meta_keys['spline_mpe']]
         except:
@@ -162,6 +170,7 @@ for infile in infiles:
             add_muon_energy(frame)
 
         try:
+            most_energetic_track = frame[meta_keys['mc_most_energetic_muon']] # I3Particle
             muon_energy_at_interaction = frame[meta_keys['mc_muon_energy_at_interaction']].value # I3Double
             muon_energy_at_det =  frame[meta_keys['mc_muon_energy_at_detector_entry']].value # I3Double
             muon_energy_leaving = frame[meta_keys['mc_muon_energy_at_detector_leave']].value # I3Double
@@ -174,7 +183,8 @@ for infile in infiles:
         is_CC_interaction = interaction_type < 1.5
 
         # Check if the muon enters the detector with some energy selection
-        pass_muon_energy = np.isfinite(muon_energy_at_det) and muon_energy_at_det > min_muon_energy_at_detector and muon_energy_at_det < max_muon_energy_at_detector
+        #pass_muon_energy = np.isfinite(muon_energy_at_det) and muon_energy_at_det > min_muon_energy_at_detector and muon_energy_at_det < max_muon_energy_at_detector
+        pass_muon_energy = True
 
 
         # Track sanity check. is MCMostEnergeticTrack energy similar to MuonEnergy at interaction point?
@@ -200,7 +210,8 @@ for infile in infiles:
             event_id = event_header.run_id * n_events_per_file + event_header.event_id
 
             # Get all pulses.
-            event_pulse_data, summary = get_pulse_info(frame, event_id, pulses_key=meta_keys['pulses'], calibrate=True, geo_frame=geo_frame)
+            event_pulse_data, summary = get_pulse_info(frame, event_id, pulses_key=meta_keys['pulses'], correction_key = pulses_correction_factor_key)
+
             # Store.
             for key in pulse_data.keys():
                 pulse_data[key] += event_pulse_data[key]
@@ -254,10 +265,39 @@ for infile in infiles:
 # Write to disk using feather format.
 df_pulses = pd.concat(pulse_frames)
 df_meta = pd.concat(meta_frames)
+print(len(df_meta))
 
-ofile = os.path.join(outdir, f"pulses_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}_10_to_100TeV.ftr")
-df_pulses.reset_index(drop=True).to_feather(ofile, compression='zstd')
-ofile = os.path.join(outdir, f"meta_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}_10_to_100TeV.ftr")
-df_meta.reset_index(drop=True).to_feather(ofile, compression='zstd')
+compression_type = ''
+options = tf.io.TFRecordOptions(compression_type=compression_type)
 
-print(f"stored {event_count} events in outfile {ofile}")
+geo_file = "/home/storage/hans/jax_reco_new/data/icecube/detector_geometry.csv"
+sim_handler = I3SimHandler(df_meta = df_meta,
+                            df_pulses = df_pulses,
+                            geo_file = geo_file)
+
+write_path = os.path.join(outdir, f"{infile_base}_1st_pulse.tfrecord")
+with tf.io.TFRecordWriter(write_path, options) as writer:
+
+    # Loop over events, and write to tfrecords file.
+    for i in range(len(df_meta)):
+        meta, pulses = sim_handler.get_event_data(i)
+
+        event_data = sim_handler.get_per_dom_summary_from_sim_data(meta, pulses, correct_charge=True)
+
+        x = event_data[['x', 'y','z','time', 'charge']].to_numpy()
+        y = meta[['muon_energy_at_detector', 'q_tot', 'muon_zenith', 'muon_azimuth', 'muon_time',
+                      'muon_pos_x', 'muon_pos_y', 'muon_pos_z', 'spline_mpe_zenith',
+                      'spline_mpe_azimuth', 'spline_mpe_time', 'spline_mpe_pos_x',
+                      'spline_mpe_pos_y', 'spline_mpe_pos_z']].to_numpy()
+
+        s = 2.5
+        x[:, 3] = x[:, 3] + 3.0 * truncnorm.rvs(-s, s, size=len(x))
+
+        writer.write(serialize_example(
+                                tf.constant(x, dtype=tf.float64),
+                                tf.constant(y, dtype=tf.float64),
+                            )
+                        )
+
+print(f"stored {event_count} events in outfile {write_path}")
+print(f"stored {i} events in outfile {write_path}")

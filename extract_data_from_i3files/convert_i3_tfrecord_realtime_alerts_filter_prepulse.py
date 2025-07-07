@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import glob
 import os, sys
-sys.path.insert(0, "/home/storage/hans/jax_reco_new/")
+sys.path.insert(0, "/home/storage/hans/jax_reco_gupta_corrections3/")
 
 import tensorflow as tf
 
@@ -21,12 +21,12 @@ from argparse import ArgumentParser
 parser = ArgumentParser()
 
 parser.add_argument("-id", "--indir", type=str,
-                  default="/home/storage2/hans/i3files/alerts/bfrv2/i3_nominal/",
+                  default="/home/storage2/hans/i3files/alerts/ftp-v1_flat/energy_loss_network_inputs/npe/i3/w_correction/",
                   dest="INDIR",
                   help="directory containing the .i3 files")
 
 parser.add_argument("-ib", "--infile_base", type=str,
-                  default="event_11232_N100",
+                  default="data_event_8840",
                   dest="INFILE_BASE",
                   help="part of filename that is common to all .i3 files")
 
@@ -40,18 +40,8 @@ parser.add_argument("-did", "--dataset_id", type=int,
                   dest="DATASET_ID",
                   help="ID of IceCube dataset")
 
-parser.add_argument("-s", "--file_index_start", type=int,
-                  default=0,
-                  dest="FILE_INDEX_START",
-                  help="start index of range of files to be converted (included)")
-
-parser.add_argument("-e", "--file_index_end", type=int,
-                  default=10,
-                  dest="FILE_INDEX_END",
-                  help="end index of range of files to be converted (excluded)")
-
 parser.add_argument("-o", "--outdir", type=str,
-                  default="/home/storage2/hans/i3files/alerts/bfrv2/filter_prepulse/",
+                  default="/home/storage2/hans/i3files/alerts/ftp-v1_flat/energy_loss_network_inputs/npe/tfrecords/filter_prepulse/",
                   dest="OUTDIR",
                   help="directory where to write output feather files")
 
@@ -66,8 +56,6 @@ dataset_id = args.DATASET_ID
 indir = args.INDIR
 infile_base = args.INFILE_BASE
 infile_suffix = args.INFILE_SUFFIX
-file_index_start = args.FILE_INDEX_START
-file_index_end = args.FILE_INDEX_END
 outdir = args.OUTDIR
 
 if args.RECOMPUTE_MU_E:
@@ -86,6 +74,8 @@ meta_keys['mc_muon_energy_at_detector_entry']  = 'TrueMuoneEnergyAtDetectorEntry
 meta_keys['mc_muon_energy_at_detector_leave'] = 'TrueMuoneEnergyAtDetectorLeave'
 min_muon_energy_at_detector = 0 # GeV
 max_muon_energy_at_detector = 1000000 # GeV
+
+pulses_correction_factor_key = meta_keys['pulses'] + "_CorrectionFactors"
 
 # in old datsets, the background I3MCTree is kept separately
 # from the I3MCTree. Hence checking for coincident events depends
@@ -108,16 +98,22 @@ else:
 #print(infiles)
 
 # collect all existing files
-infiles = []
-for file_index in range(file_index_start, file_index_end):
-    infile = os.path.join(indir, f"{infile_base}_Part0{file_index:.0f}{infile_suffix}")
-    if os.path.exists(infile):
-        infiles.append(infile)
-    else:
-        infile = os.path.join(indir, f"{infile_base}_Part0{file_index:.0f}{infile_suffix}")
-        if os.path.exists(infile):
-            infiles.append(infile)
+#infiles = []
+#for file_index in range(file_index_start, file_index_end):
+#    infile = os.path.join(indir, f"{infile_base}_Part0{file_index:.0f}{infile_suffix}")
+#    if os.path.exists(infile):
+#        infiles.append(infile)
+#    else:
+#        infile = os.path.join(indir, f"{infile_base}_Part0{file_index:.0f}{infile_suffix}")
+#        if os.path.exists(infile):
+#            infiles.append(infile)
+#
+#print(infiles)
 
+# collect all existing files
+infiles = []
+infile = os.path.join(indir, f"{infile_base}{infile_suffix}")
+infiles.append(infile)
 print(infiles)
 
 print(f"processing {len(infiles)} .i3 files.")
@@ -138,7 +134,7 @@ g.close()
 for infile in infiles:
     # main loop
     f = dataio.I3File(infile)
-    pulse_data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[]}
+    pulse_data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[], 'charge_correction': []}
 
     meta_data = {'event_id': [], 'idx_start': [], 'idx_end': [], 'n_channel_HLC': []}
     meta_data.update({'neutrino_energy': [], 'muon_energy': [], 'muon_energy_at_detector': []})
@@ -214,7 +210,8 @@ for infile in infiles:
             event_id = event_header.run_id * n_events_per_file + event_header.event_id
 
             # Get all pulses.
-            event_pulse_data, summary = get_pulse_info(frame, event_id, pulses_key=meta_keys['pulses'])
+            event_pulse_data, summary = get_pulse_info(frame, event_id, pulses_key=meta_keys['pulses'], correction_key = pulses_correction_factor_key)
+
             # Store.
             for key in pulse_data.keys():
                 pulse_data[key] += event_pulse_data[key]
@@ -278,15 +275,16 @@ sim_handler = I3SimHandler(df_meta = df_meta,
                             df_pulses = df_pulses,
                             geo_file = geo_file)
 
-write_path = os.path.join(outdir, f"{infile_base}_from_{file_index_start}_to_{file_index_end}_1st_pulse.tfrecord")
+write_path = os.path.join(outdir, f"{infile_base}_1st_pulse.tfrecord")
 with tf.io.TFRecordWriter(write_path, options) as writer:
 
     # Loop over events, and write to tfrecords file.
     for i in range(len(df_meta)):
         meta, pulses = sim_handler.get_event_data(i)
 
-    # Get dom locations, first hit times, and total charges (for each dom).
+        # Get dom locations, first hit times, and total charges (for each dom).
         event_data = sim_handler.get_per_dom_summary_from_sim_data(meta, pulses)
+        # Remove early pulses.
         sim_handler.replace_early_pulse(event_data, pulses)
 
         x = event_data[['x', 'y','z','time', 'charge']].to_numpy()
