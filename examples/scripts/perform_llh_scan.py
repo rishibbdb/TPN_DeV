@@ -182,6 +182,7 @@ centered_track_pos, centered_track_time = track_pos, track_time
 if args.center_track_seed:
     print("shifting seed vertex.")
     centered_track_pos, centered_track_time = center_track_pos_and_time_based_on_data(event_data, track_pos, track_time, track_src)
+
 print("seed vertex:", centered_track_pos)
 
 fitting_event_data = jnp.array(event_data[['x', 'y', 'z', 'time', 'charge']].to_numpy())
@@ -229,8 +230,8 @@ ax.scatter(np.rad2deg(track_src[0]), np.rad2deg(track_src[1]), marker="x", color
 
 ax.set_xlabel("zenith [deg]", fontsize=16)
 ax.set_ylabel("azimuth [deg]", fontsize=16)
-ax.set_xlim(np.rad2deg([track_src[0]-dzen, track_src[0]+dzen]))
-ax.set_ylim(np.rad2deg([track_src[1]-dazi, track_src[1]+dazi]))
+ax.set_xlim(np.rad2deg([true_src[0]-dzen, true_src[0]+dzen]))
+ax.set_ylim(np.rad2deg([true_src[1]-dazi, true_src[1]+dazi]))
 ax.tick_params(axis='both', which='both', width=1.5, colors='0.0', labelsize=16)
 
 plt.legend()
