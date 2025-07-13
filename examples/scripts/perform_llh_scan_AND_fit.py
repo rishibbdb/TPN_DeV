@@ -203,7 +203,7 @@ fit_llh = get_fitter(
 
 # Run the fit
 solution = fit_llh(track_src, centered_track_pos, centered_track_time, fitting_event_data)
-best_logl, best_direction, _, _= solution
+best_logl, best_direction, best_vertex, best_time= solution
 
 print("")
 print("solution found.")
@@ -226,7 +226,7 @@ print("running the scan.")
 # Run the scan.
 # And split grid into sub-grids that are processed sequentially.
 # This can avoid OOM errors if gpu memory is insufficient for entire grid.
-solution = scan_llh(X, Y, track_pos, track_time, fitting_event_data, args.N_SPLITS)
+solution = scan_llh(X, Y, best_vertex, best_time, fitting_event_data, args.N_SPLITS)
 sol_logl, sol_vertex, sol_time = solution
 logls = sol_logl.reshape(X.shape)
 
