@@ -140,7 +140,7 @@ true_time = meta['muon_time']
 true_zenith = meta['muon_zenith']
 true_azimuth = meta['muon_azimuth']
 true_src = jnp.array([true_zenith, true_azimuth])
-print("true direction:", true_src)
+print("true direction:", np.rad2deg(true_src), "deg")
 
 if args.SEED == "spline_mpe":
     # Use SplineMPE as a seed.
@@ -160,18 +160,18 @@ elif args.SEED == "truth":
 else:
     raise ValueError(f"seed {args.SEED} not available. Use spline_mpe or truth")
 
-print("seed direction:", track_src)
-print("original seed vertex:", track_pos)
+print("seed direction:", np.rad2deg(track_src), "deg")
+print("original seed vertex:", track_pos, "m")
 
 centered_track_pos, centered_track_time = track_pos, track_time
 if args.center_track_seed:
     print("shifting seed vertex.")
     centered_track_pos, centered_track_time = center_track_pos_and_time_based_on_data(event_data, track_pos, track_time, track_src)
 
-print("seed vertex:", centered_track_pos)
+print("seed vertex:", centered_track_pos, "m")
 
 fitting_event_data = jnp.array(event_data[['x', 'y', 'z', 'time', 'charge']].to_numpy())
-print(fitting_event_data.shape)
+print("data shape: ", fitting_event_data.shape)
 
 # Setup likelihood.
 neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
@@ -185,4 +185,10 @@ fit_llh = get_fitter(
 
 # Run the fit
 solution = fit_llh(track_src, centered_track_pos, centered_track_time, fitting_event_data)
+logl, direction, vertex, time = solution
 
+print("")
+print("solution found.")
+print(f"logl: {logl:.3f}")
+print(f"direction: {np.rad2deg(direction)} deg")
+print(f"position: {vertex} m")
