@@ -9,7 +9,8 @@ def get_fitter(neg_llh,
                 scale=100.0,
                 scale_rad=50.0,
                 rtol=1e-8,
-                atol=1e-4):
+                atol=1e-4,
+                use_batches=False):
     """Creates a fitter() function that performs a 5D likelihood optimization.
     Note: The argumenst are used globally
     within functions defined in the body.
@@ -173,5 +174,8 @@ def get_fitter(neg_llh,
 
         logl, direction, vertex = reconstruct_event(vertex_seed, track_dir_seed, track_time, data)
         return logl, direction, vertex, track_time
+
+    if use_batches:
+        return None
 
     return run_reconstruction
