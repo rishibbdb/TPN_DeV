@@ -31,6 +31,12 @@ def get_fitter(neg_llh,
             (maps step size of 1 to value of scale).
         rtol: relative tolerance of the optimizer (see optimistix.BFGS)
         atol: abolsute tolerance of the optimizer (see optimistix.BFGS)
+        use_batches: If True, the reconstruction is performed on batches
+            of events. The fitter function that is created here will be
+            modified such that all its arguments have an additional dimension
+            at index 0 - the event dimension. Argument shapes are
+            shape=(batch_size, argument_size), where batch_size corresponds
+            to the number of events in the batch.
 
     Returns
     -------
@@ -176,6 +182,16 @@ def get_fitter(neg_llh,
         return logl, direction, vertex, track_time
 
     if use_batches:
-        return None
+        # The fitter function should operate on batches of events, i.e.
+        # reconstruct multiple events in parallel.
+        # All argument tensors and result tensor have one additional
+        # batch dimension at index 0.
+        run_reconstruction_v = jax.vmap(
+                                    run_reconstruction,
+                                    (0, 0, 0, 0),
+                                    (0, 0, 0, 0)
+                                )
+
+        return run_reconstruction_v
 
     return run_reconstruction
