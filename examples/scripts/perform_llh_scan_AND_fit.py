@@ -218,7 +218,8 @@ print("")
 scan_llh = get_scanner(
                         neg_llh,
                         use_multiple_vertex_seeds=args.use_multiple_vertex_seeds,
-                        prescan_time=args.prescan_time
+                        prescan_time=args.prescan_time,
+                        n_splits=args.N_SPLITS
                     )
 
 zenith = jnp.linspace(true_src[0]-dzen, true_src[0]+dazi, n_eval)
@@ -229,7 +230,7 @@ print("running the scan.")
 # Run the scan.
 # And split grid into sub-grids that are processed sequentially.
 # This can avoid OOM errors if gpu memory is insufficient for entire grid.
-solution = scan_llh(X, Y, best_vertex, best_time, fitting_event_data, args.N_SPLITS)
+solution = scan_llh(X, Y, best_vertex, best_time, fitting_event_data)
 sol_logl, sol_vertex, sol_time = solution
 logls = sol_logl.reshape(X.shape)
 

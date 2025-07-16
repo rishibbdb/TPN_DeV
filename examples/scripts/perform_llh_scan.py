@@ -4,7 +4,7 @@ import argparse
 parser = argparse.ArgumentParser()
 
 parser.add_argument("-r", "--path_to_repo", type=str,
-                  default="/home/storage/hans/jax_reco_gupta_corrections3/",
+                  default="/home/storage/hans/jax_reco_gupta_corrections4/",
                   dest="PATH_TO_REPO",
                   help="directory containing the reco code")
 

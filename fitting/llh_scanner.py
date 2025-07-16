@@ -8,10 +8,12 @@ def get_scanner(neg_llh,
                 prescan_time=False,
                 scale=100.,
                 rtol=1e-8,
-                atol=1e-4):
+                atol=1e-4,
+                use_jit=True,
+                n_splits=20):
     """Creates a scanner() function that performs a 2D profile likelihood
     scan in the sky (direction).
-	Note: The argumenst are used globally within functions defined in the body.
+    Note: The argumenst are used globally within functions defined in the body.
 
     Arguments
     ---------
@@ -174,13 +176,14 @@ def get_scanner(neg_llh,
 
     # Vectorize directions vertices in grid
     run_reconstruction_v = jax.vmap(run_reconstruction, (0, None, None, None), 0)
+    # Placeholder. We may jit later if user requests it.
+    run_reconstruction_v_jit = run_reconstruction_v
 
     def run_profile_llh_scan(grid_x,
                             grid_y,
                             vertex_seed,
                             track_time,
-                            data,
-                            n_splits=10):
+                            data):
         """Runs multiple vertex reconstructions (one per direction point
         within the grid specified by the function arguments). Depending on
         global parameters, each vertex reconstruction may be obtained
@@ -199,8 +202,12 @@ def get_scanner(neg_llh,
         scan_dirs = jnp.column_stack([grid_x.flatten(), grid_y.flatten()])
         if n_splits < 2:
             # No splitting of grid. We process everything all at once.
+            if use_jit:
+                run_reconstruction_v_jit = \
+                    jax.jit(run_reconstruction_v).lower(scan_dirs, vertex_seed, track_time, data).compile()
+
             logls, sol_pos, sol_time = \
-                run_reconstruction_v(scan_dirs, vertex_seed, track_time, data)
+                run_reconstruction_v_jit(scan_dirs, vertex_seed, track_time, data)
 
         else:
             # Process the grid in n_split batches.
@@ -217,9 +224,19 @@ def get_scanner(neg_llh,
             sol_pos = []
             sol_time = []
             for i in range(n_splits):
+                current_scan_dirs = scan_dirs[i*n_per_split: (i+1) * n_per_split, :]
+                if use_jit:
+                    run_reconstruction_v_jit = \
+                        jax.jit(run_reconstruction_v).lower(
+                            current_scan_dirs,
+                            vertex_seed,
+                            track_time,
+                            data
+                        ).compile()
+
                 logls_, sol_pos_, sol_time_ = \
-                    run_reconstruction_v(
-                        scan_dirs[i*n_per_split: (i+1) * n_per_split, :],
+                    run_reconstruction_v_jit(
+                        current_scan_dirs,
                         vertex_seed,
                         track_time,
                         data

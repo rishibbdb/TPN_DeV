@@ -106,6 +106,17 @@ else:
 eval_network_v = get_network_eval_v_fn(bpath=network_path, dtype=dtype, n_hidden=n_hidden)
 eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=dtype, gupta=gupta, n_comp=n_comp)
 
+# Setup likelihood with 3 ns gaussian convolution.
+neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track, sigma=3.0)
+
+# Potential for additional stability via prescanning optimal vertex time
+fit_llh = get_fitter(
+                        neg_llh,
+                        use_multiple_vertex_seeds=args.use_multiple_vertex_seeds,
+                        prescan_time=args.prescan_time,
+                        use_batches=True
+                    )
+
 # Load event input data in tfrecords format for efficient
 # batched processing.
 if '*' in args.TFRECORDS_FILE_NAME:
@@ -119,63 +130,61 @@ else:
 batch_iter = batch_maker.get_batch_iterator()
 
 # Get one batch.
-# Note: You are free to loop over batches of course.
-# i.e. wrapping the code below into a foor loop
-# and concatenate the results.
-pulse_data, meta_data = batch_iter.next() # [Nev, Ndom, Nobs], [Nev, Naux]
+# Note: You are free to extend over more batches.
 
-pulse_data = jnp.array(pulse_data.numpy())
-meta_data = jnp.array(meta_data.numpy())
+collect_results = []
+for i in range(2):
+    print("reconstructing batch", i)
+    pulse_data, meta_data = batch_iter.next() # [Nev, Ndom, Nobs], [Nev, Naux]
 
-# For definition of different data fields / indices in meta_data
-# see https://github.com/HansN87/TriplePandelReco_JAX/blob/e3692febe6050c483df3ad7b23a7d31f360c617f/extract_data_from_i3files/convert_i3_tfrecord.py#L278C1-L282C74
-#        pulse_data = event_data[['x', 'y','z','time', 'charge']].to_numpy()
-#        meta_data = meta[['muon_energy_at_detector', 'q_tot', 'muon_zenith', 'muon_azimuth', 'muon_time',
-#                      'muon_pos_x', 'muon_pos_y', 'muon_pos_z', 'spline_mpe_zenith',
-#                      'spline_mpe_azimuth', 'spline_mpe_time', 'spline_mpe_pos_x',
-#                      'spline_mpe_pos_y', 'spline_mpe_pos_z']].to_numpy()
+    pulse_data = jnp.array(pulse_data.numpy())
+    meta_data = jnp.array(meta_data.numpy())
 
-
-if args.SEED == "spline_mpe":
-    # Use SplineMPE as a seed.
-    seed_data = meta_data[:, 8:14]
-
-elif args.SEED == "truth":
-    seed_data = meta_data[:, 2:8]
-
-else:
-    raise ValueError(f"seed {args.SEED} not available. Use spline_mpe or truth")
-
-centered_track_pos, centered_track_time = seed_data[: ,3:], seed_data[:, 2]
-track_src = seed_data[:, :2]
-
-if args.center_track_seed:
-    print("shifting seed vertex.")
-    centered_track_pos, centered_track_time = center_track_pos_and_time_based_on_data_batched_v(pulse_data, seed_data)
-
-print("seed vertex of first event in batch:", centered_track_pos[0], "m")
+    # For the definition of different data fields / indices in meta_data
+    # see https://github.com/HansN87/TriplePandelReco_JAX/blob/e3692febe6050c483df3ad7b23a7d31f360c617f/extract_data_from_i3files/convert_i3_tfrecord.py#L278C1-L282C74
+    #        pulse_data = event_data[['x', 'y','z','time', 'charge']].to_numpy()
+    #        meta_data = meta[['muon_energy_at_detector', 'q_tot', 'muon_zenith', 'muon_azimuth', 'muon_time',
+    #                      'muon_pos_x', 'muon_pos_y', 'muon_pos_z', 'spline_mpe_zenith',
+    #                      'spline_mpe_azimuth', 'spline_mpe_time', 'spline_mpe_pos_x',
+    #                      'spline_mpe_pos_y', 'spline_mpe_pos_z']].to_numpy()
 
 
-print("data shape: ", pulse_data.shape)
+    if args.SEED == "spline_mpe":
+        # Use SplineMPE as a seed.
+        seed_data = meta_data[:, 8:14]
 
-# Setup likelihood.
-neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track, sigma=3.0)
+    elif args.SEED == "truth":
+        seed_data = meta_data[:, 2:8]
 
-# Potential for additional stability via prescanning optimal vertex time
-fit_llh = get_fitter(
-                        neg_llh,
-                        use_multiple_vertex_seeds=args.use_multiple_vertex_seeds,
-                        prescan_time=args.prescan_time,
-                        use_batches=True
-                    )
+    else:
+        raise ValueError(f"seed {args.SEED} not available. Use spline_mpe or truth")
 
-# JIT for speed (given the current batch tensor dimensions)
-fit_llh = jax.jit(fit_llh).lower(track_src, centered_track_pos, centered_track_time, pulse_data).compile()
+    seed_data = jnp.array(seed_data)
+    centered_track_pos, centered_track_time = seed_data[: ,3:], seed_data[:, 2]
+    track_src = seed_data[:, :2]
 
-# Run the fit
-solution = fit_llh(track_src, centered_track_pos, centered_track_time, pulse_data)
-logl, direction, vertex, time = solution
+    if args.center_track_seed:
+        print("shifting seed vertex.")
+        centered_track_pos, centered_track_time = center_track_pos_and_time_based_on_data_batched_v(pulse_data, seed_data)
 
+    print("seed vertex of first event in batch:", centered_track_pos[0], "m")
+    print("data shape: ", pulse_data.shape)
+
+    # JIT for speed (given the current batch tensor dimensions)
+    fit_llh_jit = jax.jit(fit_llh).lower(track_src, centered_track_pos, centered_track_time, pulse_data).compile()
+
+    # Run the fit
+    solution = fit_llh_jit(track_src, centered_track_pos, centered_track_time, pulse_data)
+    logl, direction, vertex, time = solution
+
+    # And collect some results. E.g. the logl values.
+    collect_results.append(logl)
+    print("")
+
+results = jnp.concatenate(collect_results)
 print("")
-print("logl values (best-fit) of events in batch:")
-print(logl)
+print("logl values (best-fit) of events across all batches:")
+print(results)
+print("shape of result:", results.shape)
+
+
