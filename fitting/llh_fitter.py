@@ -176,7 +176,7 @@ def get_fitter(neg_llh,
         # We are using only a single vertex seed
         if prescan_time:
             # Update time with best-match for given vertex_seed
-            track_time = get_track_time(track_dir_seed, vertex_seeed, track_time, data)
+            track_time = get_track_time(track_dir_seed, vertex_seed, track_time, data)
 
         logl, direction, vertex = reconstruct_event(vertex_seed, track_dir_seed, track_time, data)
         return logl, direction, vertex, track_time

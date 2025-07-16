@@ -8,8 +8,8 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn, n_comp=4,  sigma=
     """
     here would be a smart docstring
     """
+    sigma = jnp.array(sigma)
 
-    @jax.jit
     def neg_c_triple_gamma_llh(track_direction,
                                track_vertex,
                                track_time,
@@ -17,7 +17,6 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn, n_comp=4,  sigma=
 
 
         # Constant parameters.
-        sigma = jnp.array(sigma) # width of gaussian convolution
         sigma_noise = jnp.array(1000.0)
 
         dom_pos = event_data[:, :3]
@@ -64,8 +63,8 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn, n_comp=4,  sigma=
 
         weight = jnp.expand_dims(jnp.array([1.0-floor_weight, floor_weight]), axis=1)
 
-		log_probs = jax.scipy.special.logsumexp(log_probs, 0, weight)
-		log_probs = jnp.where(idx_padded, log_probs, jnp.array(0.0))
+        log_probs = jax.scipy.special.logsumexp(log_probs, 0, weight)
+        log_probs = jnp.where(idx_padded, log_probs, jnp.array(0.0))
         return -2.0 * jnp.sum(log_probs)
 
     return neg_c_triple_gamma_llh
@@ -93,7 +92,7 @@ def get_llh_and_grad_fs_for_iminuit_migrad_profile(eval_network_doms_and_track):
     """
     neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
 
-	# this gradient is 3D (vertex) not 5D (vertex + direction)
+    # this gradient is 3D (vertex) not 5D (vertex + direction)
     grad_neg_llh_3D = jax.jit(jax.grad(neg_llh, argnums=1))
 
     return neg_llh, grad_neg_llh_3D

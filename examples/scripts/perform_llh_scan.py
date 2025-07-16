@@ -192,10 +192,14 @@ print(fitting_event_data.shape)
 neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
 
 # Potential for additional stability via prescanning optimal vertex time
+# And split grid into sub-grids that are processed sequentially.
+# This can avoid OOM errors if gpu memory is insufficient for entire grid
 scan_llh = get_scanner(
                         neg_llh,
                         use_multiple_vertex_seeds=args.use_multiple_vertex_seeds,
-                        prescan_time=args.prescan_time
+                        prescan_time=args.prescan_time,
+                        n_splits=args.N_SPLITS,
+                        use_jit=True
                     )
 
 zenith = jnp.linspace(true_src[0]-dzen, true_src[0]+dazi, n_eval)
@@ -203,9 +207,7 @@ azimuth = jnp.linspace(true_src[1]-dzen, true_src[1]+dazi, n_eval)
 X, Y = jnp.meshgrid(zenith, azimuth)
 
 # Run the scan.
-# And split grid into sub-grids that are processed sequentially.
-# This can avoid OOM errors if gpu memory is insufficient for entire grid.
-solution = scan_llh(X, Y, track_pos, track_time, fitting_event_data, args.N_SPLITS)
+solution = scan_llh(X, Y, track_pos, track_time, fitting_event_data)
 sol_logl, sol_vertex, sol_time = solution
 logls = sol_logl.reshape(X.shape)
 

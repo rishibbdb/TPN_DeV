@@ -83,6 +83,8 @@ class I3SimHandler:
 
         summary_data['time'] = corrected_time
 
+# TODO: add bucket_by_sequence length to optimize padded batches.
+# See implementation in I3SimBatchHandler (based on tfrecords)
 class I3SimBatchHandlerFtr:
     @tf.autograph.experimental.do_not_convert
     def __init__(self, sim_handler, process_n_events=None, batch_size=100, n_seq_len_bins=1, remove_pre_pulses=False):

@@ -183,8 +183,11 @@ fit_llh = get_fitter(
                         prescan_time=args.prescan_time
                     )
 
+# JIT the thing. We want it to be fast.
+fit_llh_jit = jax.jit(fit_llh)
+
 # Run the fit
-solution = fit_llh(track_src, centered_track_pos, centered_track_time, fitting_event_data)
+solution = fit_llh_jit(track_src, centered_track_pos, centered_track_time, fitting_event_data)
 logl, direction, vertex, time = solution
 
 print("")
