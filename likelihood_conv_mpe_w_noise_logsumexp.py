@@ -6,10 +6,12 @@ import jax.numpy as jnp
 from jax.scipy.stats.norm import pdf as norm_pdf
 from jax.scipy.stats.norm import logpdf as norm_logpdf
 
-def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
+def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn, sigma=3.0):
     """
     here would be a smart docstring
     """
+
+    sigma = jnp.array(sigma) # width of gaussian convolution
 
     @jax.jit
     def neg_c_triple_gamma_llh(track_direction,
@@ -19,7 +21,6 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
 
 
         # Constant parameters.
-        sigma = jnp.array(3.0) # width of gaussian convolution
         sigma_noise = jnp.array(1000.0)
 
         dom_pos = event_data[:, :3]

@@ -48,6 +48,11 @@ parser.add_argument("-s", "--seed", type=str,
                     dest="SEED",
                     help="options are: spline_mpe, truth")
 
+parser.add_argument("-c", "--gaussian_convolution_width", type=float,
+                  default=3.0,
+                  dest="GAUS_CONV_WIDTH",
+                  help="how wide the convolution should be")
+
 # whether or not to shift the seed such that the vertex
 # corresponds to the charge weighted median time of the event
 parser.add_argument('--center_track_seed', default=True, action=argparse.BooleanOptionalAction)
@@ -189,7 +194,7 @@ fitting_event_data = jnp.array(event_data[['x', 'y', 'z', 'time', 'charge']].to_
 print(fitting_event_data.shape)
 
 # Setup likelihood.
-neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track)
+neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track, sigma=args.GAUS_CONV_WIDTH)
 
 # Potential for additional stability via prescanning optimal vertex time
 # And split grid into sub-grids that are processed sequentially.
