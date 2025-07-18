@@ -44,6 +44,16 @@ parser.add_argument("-s", "--seed", type=str,
                     dest="SEED",
                     help="options are: spline_mpe, truth")
 
+parser.add_argument("-nb", "--stop_after_n_batches", type=int,
+                    default=100000000000,
+                    dest="STOP_AFTER_N_BATCHES",
+                    help="Set a small number if you want to test the script on a couple of batches")
+
+parser.add_argument("-o", "--outfile", type=str,
+                    default="results.npy",
+                    dest="OUTFILE",
+                    help="Where to write the reconstruction results")
+
 # whether or not to shift the seed such that the vertex
 # corresponds to the charge weighted median time of the event
 parser.add_argument('--center_track_seed', default=True, action=argparse.BooleanOptionalAction)
@@ -76,6 +86,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import glob
+import pandas as pd
 
 # Import TriplePandel stuff
 from lib.simdata_i3 import I3SimHandler
@@ -133,58 +144,85 @@ batch_iter = batch_maker.get_batch_iterator()
 # Note: You are free to extend over more batches.
 
 collect_results = []
-for i in range(2):
-    print("reconstructing batch", i)
-    pulse_data, meta_data = batch_iter.next() # [Nev, Ndom, Nobs], [Nev, Naux]
+finished_batches = False
+i = 0
+while not finished_batches:
+    if i == args.STOP_AFTER_N_BATCHES:
+        print(f"Stopping early per user request (--stop_after_n_batches {args.STOP_AFTER_N_BATCHES}). Hence, did not reconstruct all available batches.")
+        break
 
-    pulse_data = jnp.array(pulse_data.numpy())
-    meta_data = jnp.array(meta_data.numpy())
+    try:
+        print("reconstructing batch", i)
+        pulse_data, meta_data = batch_iter.next() # [Nev, Ndom, Nobs], [Nev, Naux]
 
-    # For the definition of different data fields / indices in meta_data
-    # see https://github.com/HansN87/TriplePandelReco_JAX/blob/e3692febe6050c483df3ad7b23a7d31f360c617f/extract_data_from_i3files/convert_i3_tfrecord.py#L278C1-L282C74
-    #        pulse_data = event_data[['x', 'y','z','time', 'charge']].to_numpy()
-    #        meta_data = meta[['muon_energy_at_detector', 'q_tot', 'muon_zenith', 'muon_azimuth', 'muon_time',
-    #                      'muon_pos_x', 'muon_pos_y', 'muon_pos_z', 'spline_mpe_zenith',
-    #                      'spline_mpe_azimuth', 'spline_mpe_time', 'spline_mpe_pos_x',
-    #                      'spline_mpe_pos_y', 'spline_mpe_pos_z']].to_numpy()
+        pulse_data = jnp.array(pulse_data.numpy())
+        meta_data = jnp.array(meta_data.numpy())
+        # For the definition of different data fields / indices in meta_data
+        # see https://github.com/HansN87/TriplePandelReco_JAX/blob/e3692febe6050c483df3ad7b23a7d31f360c617f/extract_data_from_i3files/convert_i3_tfrecord.py#L278C1-L282C74
+        #        pulse_data = event_data[['x', 'y','z','time', 'charge']].to_numpy()
+        #        meta_data = meta[['muon_energy_at_detector', 'q_tot', 'muon_zenith', 'muon_azimuth', 'muon_time',
+        #                      'muon_pos_x', 'muon_pos_y', 'muon_pos_z', 'spline_mpe_zenith',
+        #                      'spline_mpe_azimuth', 'spline_mpe_time', 'spline_mpe_pos_x',
+        #                      'spline_mpe_pos_y', 'spline_mpe_pos_z']].to_numpy()
 
 
-    if args.SEED == "spline_mpe":
-        # Use SplineMPE as a seed.
-        seed_data = meta_data[:, 8:14]
+        if args.SEED == "spline_mpe":
+            # Use SplineMPE as a seed.
+            seed_data = meta_data[:, 8:14]
 
-    elif args.SEED == "truth":
-        seed_data = meta_data[:, 2:8]
+        elif args.SEED == "truth":
+            seed_data = meta_data[:, 2:8]
 
-    else:
-        raise ValueError(f"seed {args.SEED} not available. Use spline_mpe or truth")
+        else:
+            raise ValueError(f"seed {args.SEED} not available. Use spline_mpe or truth")
 
-    seed_data = jnp.array(seed_data)
-    centered_track_pos, centered_track_time = seed_data[: ,3:], seed_data[:, 2]
-    track_src = seed_data[:, :2]
+        seed_data = jnp.array(seed_data)
+        centered_track_pos, centered_track_time = seed_data[: ,3:], seed_data[:, 2]
+        track_src = seed_data[:, :2]
 
-    if args.center_track_seed:
-        print("shifting seed vertex.")
-        centered_track_pos, centered_track_time = center_track_pos_and_time_based_on_data_batched_v(pulse_data, seed_data)
+        if args.center_track_seed:
+            print("shifting seed vertex.")
+            centered_track_pos, centered_track_time = center_track_pos_and_time_based_on_data_batched_v(pulse_data, seed_data)
 
-    print("seed vertex of first event in batch:", centered_track_pos[0], "m")
-    print("data shape: ", pulse_data.shape)
+        print("seed vertex of first event in batch:", centered_track_pos[0], "m")
+        print("data shape: ", pulse_data.shape)
 
-    # JIT for speed (given the current batch tensor dimensions)
-    fit_llh_jit = jax.jit(fit_llh).lower(track_src, centered_track_pos, centered_track_time, pulse_data).compile()
+        # JIT for speed (given the current batch tensor dimensions)
+        fit_llh_jit = jax.jit(fit_llh).lower(track_src, centered_track_pos, centered_track_time, pulse_data).compile()
 
-    # Run the fit
-    solution = fit_llh_jit(track_src, centered_track_pos, centered_track_time, pulse_data)
-    logl, direction, vertex, time = solution
+        # Run the fit
+        solution = fit_llh_jit(track_src, centered_track_pos, centered_track_time, pulse_data)
+        logl, direction, vertex, time = solution
 
-    # And collect some results. E.g. the logl values.
-    collect_results.append(logl)
-    print("")
+        # And collect results and auxiliary data to be serialized to disk
+        # once all batches are finished.
+        # todo: output a nicer pandas.DataFrame instead of
+        # raw numpy array.
+        out_data = jnp.concatenate(
+            [
+                meta_data,
+                jnp.expand_dims(logl, axis=1),
+                direction,
+                vertex,
+                jnp.expand_dims(time, axis=1)
+            ],
+            axis=1
+        )
 
-results = jnp.concatenate(collect_results)
+        collect_results.append(out_data)
+        print("")
+        i += 1
+
+    except StopIteration:
+        print("Finished the last batch.")
+        finished_batches = True
+
+results = jnp.concatenate(collect_results, axis=0)
 print("")
 print("logl values (best-fit) of events across all batches:")
-print(results)
+print(results[:, 14])
 print("shape of result:", results.shape)
 
+# serialize to disk
+np.save(args.OUTFILE, results)
 

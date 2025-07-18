@@ -206,7 +206,8 @@ def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14, pad_
 
     edges = np.logspace(0.5, np.log10(n_doms_max), n_bins+1).astype(int)
     if bucket_batch_sizes is None:
-        factor = np.median(edges[1:] / edges[:-1])
+        #factor = np.median(edges[1:] / edges[:-1])
+        factor = 1.3
         scale = np.power(factor, np.arange(n_bins+2)[::-1])
         bucket_batch_sizes = scale * batch_size
 
@@ -218,6 +219,7 @@ def tfrecords_reader_dataset(infile, batch_size, n_features=5, n_labels=14, pad_
     #print(bucket_batch_sizes)
     #print(edges)
 
+    bucket_batch_sizes = np.clip(bucket_batch_sizes, a_min=1, a_max=None) # batch size at least 1
     bucket_batch_sizes = bucket_batch_sizes.astype(int)
 
     _element_length_funct = lambda x, y: tf.shape(x)[0]
