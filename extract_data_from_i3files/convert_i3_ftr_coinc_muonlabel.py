@@ -4,7 +4,6 @@ from icecube.sim_services.label_events import ClassificationConverter
 from icecube.icetray import I3Tray
 from icecube.dataclasses import I3Particle
 from icecube.icetray import I3Units
-from I3Tray import I3Tray
 from icecube.icetray import *
 from icecube.sim_services.label_events.enums import classification
 import numpy as np
@@ -17,7 +16,7 @@ from scipy.stats import truncnorm
 import pandas as pd
 import os
 import glob
-
+# os.path.append('/mnt/home/baburish/jax/TriplePandelReco_JAX')
 from _lib.pulse_extraction_from_i3 import get_pulse_info
 
 from argparse import ArgumentParser
@@ -133,6 +132,10 @@ def framestats(frame):
   global pulse_frames
   global event_count
 
+  if args.RECOMPUTE_MU_E:
+            # Compute true properties of muon.
+            #print("recomputing muon energy.")
+            add_muon_energy(frame)
   try:
       muon_energy_at_interaction = frame[meta_keys['mc_muon_energy_at_interaction']].value # I3Double
       muon_energy_at_det =  frame[meta_keys['mc_muon_energy_at_detector_entry']].value # I3Double
