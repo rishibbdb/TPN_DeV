@@ -4,7 +4,6 @@ from icecube.sim_services.label_events import ClassificationConverter
 from icecube.icetray import I3Tray
 from icecube.dataclasses import I3Particle
 from icecube.icetray import I3Units
-from I3Tray import I3Tray
 from icecube.icetray import *
 from icecube.sim_services.label_events.enums import classification
 import numpy as np
@@ -17,7 +16,7 @@ from scipy.stats import truncnorm
 import pandas as pd
 import os
 import glob
-
+# os.path.append('/mnt/home/baburish/jax/TriplePandelReco_JAX')
 from _lib.pulse_extraction_from_i3 import get_pulse_info
 
 from argparse import ArgumentParser
@@ -89,7 +88,22 @@ meta_keys['spline_mpe'] = 'SplineMPEIC'
 meta_keys['mc_muon_energy_at_interaction'] = 'TrueMuonEnergyAtInteraction'
 meta_keys['mc_muon_energy_at_detector_entry']  = 'TrueMuoneEnergyAtDetectorEntry'
 meta_keys['mc_muon_energy_at_detector_leave'] = 'TrueMuoneEnergyAtDetectorLeave'
+meta_keys['bkg_mc_tree'] = 'I3MCTree'
+n_events_per_file = int(1.e5)
+event_count = 0
+event_first_pulse_idx = 0 # inclusive
+event_last_pulse_idx = 0 # inclusive
+pulse_data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[]}
 
+meta_data = {'event_id': [], 'idx_start': [], 'idx_end': [], 'n_channel_HLC': []}
+meta_data.update({'neutrino_energy': [], 'muon_energy': [], 'muon_energy_at_detector': []})
+meta_data.update({'muon_energy_lost': [], 'q_tot': [], 'n_channel': []})
+meta_data.update({'muon_zenith': [], 'muon_azimuth': [], 'muon_time': []})
+meta_data.update({'muon_pos_x': [], 'muon_pos_y': [], 'muon_pos_z': []})
+meta_data.update({'spline_mpe_zenith': [], 'spline_mpe_azimuth': [], 'spline_mpe_time': []})
+meta_data.update({'spline_mpe_pos_x': [], 'spline_mpe_pos_y': [], 'spline_mpe_pos_z': []})
+min_muon_energy_at_detector = 1000 # GeV
+max_muon_energy_at_detector = 10000 # GeV
 
 muon_label_list = []
 def muonframe(frame):
@@ -117,21 +131,11 @@ def framestats(frame):
   global meta_frames
   global pulse_frames
   global event_count
-  n_events_per_file = int(1.e5)
-  event_count = 0
-  event_first_pulse_idx = 0 # inclusive
-  event_last_pulse_idx = 0 # inclusive
-  pulse_data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[]}
 
-  meta_data = {'event_id': [], 'idx_start': [], 'idx_end': [], 'n_channel_HLC': []}
-  meta_data.update({'neutrino_energy': [], 'muon_energy': [], 'muon_energy_at_detector': []})
-  meta_data.update({'muon_energy_lost': [], 'q_tot': [], 'n_channel': []})
-  meta_data.update({'muon_zenith': [], 'muon_azimuth': [], 'muon_time': []})
-  meta_data.update({'muon_pos_x': [], 'muon_pos_y': [], 'muon_pos_z': []})
-  meta_data.update({'spline_mpe_zenith': [], 'spline_mpe_azimuth': [], 'spline_mpe_time': []})
-  meta_data.update({'spline_mpe_pos_x': [], 'spline_mpe_pos_y': [], 'spline_mpe_pos_z': []})
-  min_muon_energy_at_detector = 1000 # GeV
-  max_muon_energy_at_detector = 10000 # GeV
+  if args.RECOMPUTE_MU_E:
+            # Compute true properties of muon.
+            #print("recomputing muon energy.")
+            add_muon_energy(frame)
   try:
       muon_energy_at_interaction = frame[meta_keys['mc_muon_energy_at_interaction']].value # I3Double
       muon_energy_at_det =  frame[meta_keys['mc_muon_energy_at_detector_entry']].value # I3Double
@@ -155,23 +159,16 @@ def framestats(frame):
   pass_muon_energy = np.isfinite(muon_energy_at_det) and muon_energy_at_det > min_muon_energy_at_detector and muon_energy_at_det < max_muon_energy_at_detector
   energy_ratio = muon_energy_at_interaction  / most_energetic_track.energy
   found_correct_muon = energy_ratio < 0.9 or energy_ratio > 0.9
-  # print(pass_muon_energy, found_correct_muon)
   has_sensible_muon = np.logical_and(pass_muon_energy, energy_ratio)
-  # print(frame['I3MCTree'])
-  # print(meta_keys)
   if meta_keys['bkg_mc_tree'] == 'I3MCTree':
      has_no_coinc = len(frame['I3MCTree'].get_primaries()) == 1
   else:
      has_no_coinc = len(frame[meta_keys['bkg_mc_tree']]) == 0
-  # print(has_sensible_muon, has_no_coinc)
   has_sensible_muon = np.logical_and(has_sensible_muon, has_no_coinc)
-  # print(is_CC_interaction, has_sensible_muon)
   if np.logical_and(is_CC_interaction, has_sensible_muon):
     # Retain event.
-    print("Test")
     event_count += 1
 
-    # Define unique event identifier.
     event_id = event_header.run_id * n_events_per_file + event_header.event_id
 
     # Get all pulses.
@@ -212,18 +209,6 @@ def framestats(frame):
     meta_data['spline_mpe_pos_y'].append(spline_mpe.pos.y)
     meta_data['spline_mpe_pos_z'].append(spline_mpe.pos.z)
 
-    df_pulses = pd.DataFrame.from_dict(pulse_data)
-    df_meta = pd.DataFrame.from_dict(meta_data)
-    event_first_pulse_idx = event_last_pulse_idx + 1
-    meta_frames.append(df_meta)
-    pulse_frames.append(df_pulses)
-      # Last action:
-      # update first pulse idx for next event.
-    # print("A",df_meta)
-  # print(event_count)
-    
-    # return meta_frames, pulse_frames
-
 def label_muons(file):
     i3file = file
     gcd = "/cvmfs/icecube.opensciencegrid.org/data/GCD/GeoCalibDetectorStatus_2020.Run134142.Pass2_V0.i3.gz"
@@ -240,71 +225,39 @@ def label_muons(file):
     tray.Add(framestats, Streams=[icetray.I3Frame.Physics])
     tray.Execute()
     tray.PrintUsage()
-    return meta_frames, pulse_frames, event_count
+    return meta_data, pulse_data, event_count
 
-
-if dataset_id in [21002, 21047, 21124]:
-    meta_keys['bkg_mc_tree'] = 'BackgroundI3MCTree_preMuonProp'
-
-elif dataset_id in [21217]:
-    meta_keys['bkg_mc_tree'] = 'BackgroundI3MCTree'
-
-else:
-    # assume new datasets by default
-    meta_keys['bg_mc_tree'] = 'I3MCTree'
-
-
-# collect all existing files
-infiles = []
-for file_index in range(file_index_start, file_index_end):
-    infile = os.path.join(indir, f"{infile_base}.{dataset_id:06}.{file_index:06}{infile_suffix}")
-    if os.path.exists(infile):
-        infiles.append(infile)
-    else:
-        infile = os.path.join(indir, f"{infile_base}-{dataset_id:06}-{file_index:06}{infile_suffix}")
-        if os.path.exists(infile):
-            infiles.append(infile)
-
-print(infiles)
-
-print(f"processing {len(infiles)} .i3 files.")
-
-dataset_id = "22644"
-file_index_start = 900
-file_index_end = 999
-outdir = "./output"
+dataset_id = dataset_id
+file_index_start = file_index_start
+file_index_end = file_index_end
+outdir = args.OUTDIR
 os.makedirs(outdir, exist_ok=True)
 
-# directory = "/data/sim/IceCube/2023/filtered/finallevel/northern_tracks/neutrino-generator/22644/0000000-0000999/"
-# pattern = "FinalLevel_NuMu_NuGenCCNC.022644.0009*.i3.zst"
-# file_pattern = os.path.join(directory, pattern)
+directory = args.INDIR
+pattern = args.INFILE_BASE
+suffix = args.INFILE_SUFFIX
+file_pattern = os.path.join(directory, pattern+'*')
 
-# i3files = sorted(glob.glob(file_pattern))
 
+i3files = sorted(glob.glob(file_pattern))
 pulse_frames = []
 meta_frames = []
 total_event_count = 0
-# for i, i3file in enumerate(i3files[:20]):
-for i, i3file in enumerate(infiles[:20]):
-    print(f"Processing file {i+1}/{len(infiles)}: {infiles}")
-    try:
-        pulse_data, meta_data, event_count = label_muons(i3file)
-        df_pulses = pd.DataFrame.from_dict(pulse_data)
-        df_meta = pd.DataFrame.from_dict(meta_data)
+for i, i3file in enumerate(i3files):
+    print(f"Processing file {i+1}/{len(i3files)}: {i3file}")
+    meta_data, pulse_data, event_count = label_muons(i3file)
+    df_pulses = pd.DataFrame.from_dict(pulse_data)
+    df_meta = pd.DataFrame.from_dict(meta_data)
 
-        pulse_frames.append(df_pulses)
-        meta_frames.append(df_meta)
+    pulse_frames.append(df_pulses)
+    meta_frames.append(df_meta)
+    print("Len of pframes", len(pulse_frames))
+    print("Length of meta frames", len(meta_frames))
+    total_event_count += event_count
 
-        total_event_count += event_count
-
-    except Exception as e:
-        print(f"Error processing {infiles}: {e}")
-
-# Concatenate and save
 df_pulses = pd.concat(pulse_frames).reset_index(drop=True)
 df_meta = pd.concat(meta_frames).reset_index(drop=True)
 
-# Output files
 ofile_pulses = os.path.join(outdir, f"pulses_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}_10_to_100TeV.ftr")
 ofile_meta   = os.path.join(outdir, f"meta_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}_10_to_100TeV.ftr")
 
