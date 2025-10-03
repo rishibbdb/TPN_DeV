@@ -41,7 +41,7 @@ parser.add_argument("-ns", "--n_splits", type=int,
 parser.add_argument("-n", "--network", type=str,
                   default="gupta_4comp_reg",
                   dest="NETWORK",
-                  help="options are: gupta_4comp_reg, gupta_4comp, gupta_3comp, gamma_3comp")
+                  help="options are: gupta_4comp_reg, gupta_4comp, gupta_3comp, gamma_3comp, custom")
 
 parser.add_argument("-s", "--seed", type=str,
                     default="spline_mpe",
@@ -111,7 +111,10 @@ n_hidden = 96
 gupta = True
 n_comp = 4
 
-if args.NETWORK == "gupta_4comp_reg":
+if args.NETWORK == "custom":
+    network_path = '/mnt/scratch/baburish/TPN-training/gupta_mixture_jax/test_no_penalties_tree_start_epoch_35.eqx'
+
+elif args.NETWORK == "gupta_4comp_reg":
     network_path = os.path.join(args.PATH_TO_REPO, 'data/gupta/n96_4comp_w_penalty_1.e-4/new_model_no_penalties_tree_start_epoch_1000.eqx')
 
 elif args.NETWORK == "gupta_4comp":

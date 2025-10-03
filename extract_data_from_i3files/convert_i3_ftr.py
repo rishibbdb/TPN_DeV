@@ -1,11 +1,22 @@
 #!/usr/bin/env python
-
-from icecube import dataio, dataclasses
-import feather
-import pandas as pd
+from icecube import dataio, hdfwriter, icetray, MuonGun, dataclasses
+from icecube.sim_services.label_events import MCLabeler, MuonLabels
+from icecube.sim_services.label_events import ClassificationConverter
+from icecube.icetray import I3Tray
+from icecube.dataclasses import I3Particle
+from icecube.icetray import I3Units
+from icecube.icetray import *
+from icecube.sim_services.label_events.enums import classification
 import numpy as np
+import warnings
+
+import numpy as np
+from scipy.stats import norm
+from scipy.special import erf
+from scipy.stats import truncnorm
+import pandas as pd
+import os
 import glob
-import os, sys
 
 from _lib.pulse_extraction_from_i3 import get_pulse_info
 
@@ -82,31 +93,42 @@ max_muon_energy_at_detector = 10000 # GeV
 # from the I3MCTree. Hence checking for coincident events depends
 # on the dataset id
 
-if dataset_id in [21002, 21047, 21124]:
-    meta_keys['bkg_mc_tree'] = 'BackgroundI3MCTree_preMuonProp'
+# if dataset_id in [21002, 21047, 21124]:
+#     meta_keys['bkg_mc_tree'] = 'BackgroundI3MCTree_preMuonProp'
 
-elif dataset_id in [21217]:
-    meta_keys['bkg_mc_tree'] = 'BackgroundI3MCTree'
+# elif dataset_id in [21217]:
+#     meta_keys['bkg_mc_tree'] = 'BackgroundI3MCTree'
 
-else:
-    # assume new datasets by default
-    meta_keys['bg_mc_tree'] = 'I3MCTree'
-
+# else:
+#     # assume new datasets by default
+#     meta_keys['bg_mc_tree'] = 'I3MCTree'
+meta_keys['bkg_mc_tree'] = 'I3MCTree'
 
 # collect all existing files
-infiles = []
-for file_index in range(file_index_start, file_index_end):
-    infile = os.path.join(indir, f"{infile_base}.{dataset_id:06}.{file_index:06}{infile_suffix}")
-    if os.path.exists(infile):
-        infiles.append(infile)
-    else:
-        infile = os.path.join(indir, f"{infile_base}-{dataset_id:06}-{file_index:06}{infile_suffix}")
-        if os.path.exists(infile):
-            infiles.append(infile)
+# infiles = []
+# for file_index in range(file_index_start, file_index_end):
+#     infile = os.path.join(indir, f"{infile_base}.{dataset_id:06}.{file_index:06}{infile_suffix}")
+#     if os.path.exists(infile):
+#         infiles.append(infile)
+#     else:
+#         infile = os.path.join(indir, f"{infile_base}-{dataset_id:06}-{file_index:06}{infile_suffix}")
+#         if os.path.exists(infile):
+#             infiles.append(infile)
 
-print(infiles)
+# print(infiles)
+dataset_id = dataset_id
+file_index_start = file_index_start
+file_index_end = file_index_end
+outdir = args.OUTDIR
+os.makedirs(outdir, exist_ok=True)
 
-print(f"processing {len(infiles)} .i3 files.")
+directory = args.INDIR
+pattern = args.INFILE_BASE
+suffix = args.INFILE_SUFFIX
+file_pattern = os.path.join(directory, pattern+'*')
+
+i3files = sorted(glob.glob(file_pattern))
+print(f"processing {len(i3files)} .i3 files.")
 
 # outer loop over all infiles
 event_first_pulse_idx = 0 # inclusive
@@ -116,10 +138,14 @@ meta_frames = []
 pulse_frames = []
 
 event_count = 0
-
-for infile in infiles:
+event_count2 = 0
+event_count3 = 0
+event_count4 = 0
+i=0
+for infile in i3files:
     # main loop
     f = dataio.I3File(infile)
+    print(f"Processing file {i+1}/{len(infile)}: {infile}")
     pulse_data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[]}
 
     meta_data = {'event_id': [], 'idx_start': [], 'idx_end': [], 'n_channel_HLC': []}
@@ -135,7 +161,7 @@ for infile in infiles:
             frame = f.pop_physics()
 
         except:
-            print("Cant load frame. Skip!")
+            # print("Cant load frame. Skip!")
             continue
 
 
@@ -160,32 +186,36 @@ for infile in infiles:
             muon_energy_at_det =  frame[meta_keys['mc_muon_energy_at_detector_entry']].value # I3Double
             muon_energy_leaving = frame[meta_keys['mc_muon_energy_at_detector_leave']].value # I3Double
         except:
-            print("Missing a key. Skip!")
+            # print("Missing a key. Skip!")
             continue
 
-
+        event_count2+=1
         # Keep only muon neutrino CC events.
         is_CC_interaction = interaction_type < 1.5
 
         # Check if the muon enters the detector with some energy selection
         pass_muon_energy = np.isfinite(muon_energy_at_det) and muon_energy_at_det > min_muon_energy_at_detector and muon_energy_at_det < max_muon_energy_at_detector
-
+        pass_muon_energy = True
 
         # Track sanity check. is MCMostEnergeticTrack energy similar to MuonEnergy at interaction point?
         energy_ratio = muon_energy_at_interaction  / most_energetic_track.energy
         found_correct_muon = energy_ratio < 0.9 or energy_ratio > 0.9
+        # found_correct_muon = energy_ratio > 0.9
 
-        has_sensible_muon = np.logical_and(pass_muon_energy, energy_ratio)
-
+        # has_sensible_muon = np.logical_and(pass_muon_energy, energy_ratio)
+        has_sensible_muon = np.logical_and(pass_muon_energy, found_correct_muon)
         # There are no coincident events in the frame
         if meta_keys['bkg_mc_tree'] == 'I3MCTree':
-            has_no_coinc = len(frame['I3MCTree'].get_primaries()) == 1
+            has_no_coinc = len(frame['BackgroundI3MCTree'].get_primaries()) == 1
 
         else:
             has_no_coinc = len(frame[meta_keys['bkg_mc_tree']]) == 0
 
         has_sensible_muon = np.logical_and(has_sensible_muon, has_no_coinc)
-
+        if is_CC_interaction:
+            event_count3+=1
+        if has_sensible_muon:
+            event_count4+=1
         if np.logical_and(is_CC_interaction, has_sensible_muon):
             # Retain event.
             event_count += 1
@@ -243,7 +273,13 @@ for infile in infiles:
 
     meta_frames.append(df_meta)
     pulse_frames.append(df_pulses)
-
+    print("Event Count=", event_count)
+    print("Event Count2=", event_count2)
+    print("Event Count3=", event_count3)
+    print("Event Count4=", event_count4)
+    i=i+1
+    # if i > 20:
+    #     break
 # Combine all files into one.
 # Write to disk using feather format.
 df_pulses = pd.concat(pulse_frames)

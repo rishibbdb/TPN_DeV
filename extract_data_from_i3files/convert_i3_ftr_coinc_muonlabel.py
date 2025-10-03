@@ -74,46 +74,18 @@ outdir = args.OUTDIR
 if args.RECOMPUTE_MU_E:
     from _lib.muon_energy import add_muon_energy
 
-n_events_per_file = int(1.e5)
-event_count = 0
-event_first_pulse_idx = 0 # inclusive
-event_last_pulse_idx = 0 # inclusive
-meta_keys = dict()
-meta_frames = []
-pulse_frames = []
-meta_keys['pulses'] = 'TWSRTHVInIcePulsesIC'
-meta_keys['mc_primary_neutrino'] = 'MCPrimary1'
-meta_keys['mc_most_energetic_muon'] = 'MCMostEnergeticTrack'
-meta_keys['spline_mpe'] = 'SplineMPEIC'
-meta_keys['mc_muon_energy_at_interaction'] = 'TrueMuonEnergyAtInteraction'
-meta_keys['mc_muon_energy_at_detector_entry']  = 'TrueMuoneEnergyAtDetectorEntry'
-meta_keys['mc_muon_energy_at_detector_leave'] = 'TrueMuoneEnergyAtDetectorLeave'
-meta_keys['bkg_mc_tree'] = 'I3MCTree'
-n_events_per_file = int(1.e5)
-event_count = 0
-event_first_pulse_idx = 0 # inclusive
-event_last_pulse_idx = 0 # inclusive
-pulse_data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[]}
-
-meta_data = {'event_id': [], 'idx_start': [], 'idx_end': [], 'n_channel_HLC': []}
-meta_data.update({'neutrino_energy': [], 'muon_energy': [], 'muon_energy_at_detector': []})
-meta_data.update({'muon_energy_lost': [], 'q_tot': [], 'n_channel': []})
-meta_data.update({'muon_zenith': [], 'muon_azimuth': [], 'muon_time': []})
-meta_data.update({'muon_pos_x': [], 'muon_pos_y': [], 'muon_pos_z': []})
-meta_data.update({'spline_mpe_zenith': [], 'spline_mpe_azimuth': [], 'spline_mpe_time': []})
-meta_data.update({'spline_mpe_pos_x': [], 'spline_mpe_pos_y': [], 'spline_mpe_pos_z': []})
-min_muon_energy_at_detector = 1000 # GeV
-max_muon_energy_at_detector = 10000 # GeV
 
 muon_label_list = []
 def muonframe(frame):
   global muon_label_list
   try:
     seed = frame['coincident_muons'].value
-    if seed > 0:
+    # if seed > 0:
+    if frame['coincident_muons'] == True:
       False
     else:
       True
+      # print(seed)
       muon_label_list.append(seed)
   except:
     print("Error")
@@ -131,6 +103,10 @@ def framestats(frame):
   global meta_frames
   global pulse_frames
   global event_count
+  global pulse_data 
+  global meta_data
+
+
 
   if args.RECOMPUTE_MU_E:
             # Compute true properties of muon.
@@ -238,29 +214,68 @@ pattern = args.INFILE_BASE
 suffix = args.INFILE_SUFFIX
 file_pattern = os.path.join(directory, pattern+'*')
 
-
 i3files = sorted(glob.glob(file_pattern))
 pulse_frames = []
 meta_frames = []
 total_event_count = 0
 for i, i3file in enumerate(i3files):
-    print(f"Processing file {i+1}/{len(i3files)}: {i3file}")
-    meta_data, pulse_data, event_count = label_muons(i3file)
-    df_pulses = pd.DataFrame.from_dict(pulse_data)
-    df_meta = pd.DataFrame.from_dict(meta_data)
+    n_events_per_file = int(1.e5)
+    event_count = 0
+    event_first_pulse_idx = 0 # inclusive
+    event_last_pulse_idx = 0 # inclusive
+    meta_keys = dict()
+    meta_keys['pulses'] = 'TWSRTHVInIcePulsesIC'
+    meta_keys['mc_primary_neutrino'] = 'MCPrimary1'
+    meta_keys['mc_most_energetic_muon'] = 'MCMostEnergeticTrack'
+    meta_keys['spline_mpe'] = 'SplineMPEIC'
+    meta_keys['mc_muon_energy_at_interaction'] = 'TrueMuonEnergyAtInteraction'
+    meta_keys['mc_muon_energy_at_detector_entry']  = 'TrueMuoneEnergyAtDetectorEntry'
+    meta_keys['mc_muon_energy_at_detector_leave'] = 'TrueMuoneEnergyAtDetectorLeave'
+    # meta_keys['bkg_mc_tree'] = 'BackgroundI3MCTree' #'I3MCTree' 
+    meta_keys['bkg_mc_tree'] = 'I3MCTree' #'I3MCTree' 
+    pulse_data = {'event_id': [], 'sensor_id': [], 'time': [], 'charge': [], 'is_HLC':[]}
 
+    meta_data = {'event_id': [], 'idx_start': [], 'idx_end': [], 'n_channel_HLC': []}
+    meta_data.update({'neutrino_energy': [], 'muon_energy': [], 'muon_energy_at_detector': []})
+    meta_data.update({'muon_energy_lost': [], 'q_tot': [], 'n_channel': []})
+    meta_data.update({'muon_zenith': [], 'muon_azimuth': [], 'muon_time': []})
+    meta_data.update({'muon_pos_x': [], 'muon_pos_y': [], 'muon_pos_z': []})
+    meta_data.update({'spline_mpe_zenith': [], 'spline_mpe_azimuth': [], 'spline_mpe_time': []})
+    meta_data.update({'spline_mpe_pos_x': [], 'spline_mpe_pos_y': [], 'spline_mpe_pos_z': []})
+    min_muon_energy_at_detector = 1000 # GeV
+    max_muon_energy_at_detector = 10000 # GeV
+    print(f"Processing file {i+1}/{len(i3files)}: {i3file}")
+    meta_data2, pulse_data2, event_count = label_muons(i3file)
+    df_pulses = pd.DataFrame.from_dict(pulse_data2)
+    df_meta = pd.DataFrame.from_dict(meta_data2)
+    # print(df_pulses.head())
     pulse_frames.append(df_pulses)
     meta_frames.append(df_meta)
-    print("Len of pframes", len(pulse_frames))
+    print("Length of pulses", len(df_pulses))
+    print("Len of pulse frames", len(pulse_frames))
     print("Length of meta frames", len(meta_frames))
+    print("Event counts=", event_count)
     total_event_count += event_count
+    # if i > 10:
+    #   break
 
-df_pulses = pd.concat(pulse_frames).reset_index(drop=True)
-df_meta = pd.concat(meta_frames).reset_index(drop=True)
+df_pulses2 = pd.concat(pulse_frames).reset_index(drop=True)
+df_meta2 = pd.concat(meta_frames).reset_index(drop=True)
+df_pulses2 = df_pulses2.drop_duplicates(subset=['event_id', 'sensor_id', 'time'])
+df_meta2 = df_meta2.drop_duplicates(subset=['event_id'])
+
+print("Memory used by df_pulses2:", df_pulses2.memory_usage(deep=True).sum() / 1e6, "MB")
+print("Memory used by df_meta2:", df_meta2.memory_usage(deep=True).sum() / 1e6, "MB")
+pulse_frames_mem = sum([df.memory_usage(deep=True).sum() for df in pulse_frames]) / 1e6
+meta_frames_mem = sum([df.memory_usage(deep=True).sum() for df in meta_frames]) / 1e6
+print("Memory used by pulse_frames list:", pulse_frames_mem, "MB")
+print("Memory used by meta_frames list:", meta_frames_mem, "MB")
 
 ofile_pulses = os.path.join(outdir, f"pulses_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}_10_to_100TeV.ftr")
 ofile_meta   = os.path.join(outdir, f"meta_ds_{dataset_id}_from_{file_index_start}_to_{file_index_end}_10_to_100TeV.ftr")
+df_pulses2.reset_index(drop=True, inplace=True)
+df_meta2.reset_index(drop=True, inplace=True)
 
-df_pulses.to_feather(ofile_pulses, compression='zstd')
-df_meta.to_feather(ofile_meta, compression='zstd')
+df_pulses2.to_feather(ofile_pulses, compression='zstd')
+df_meta2.to_feather(ofile_meta, compression='zstd')
 print(f"Stored {total_event_count} events in outfiles:\n  {ofile_pulses}\n  {ofile_meta}")

@@ -26,16 +26,18 @@ from likelihood_const_vertex import get_neg_mpe_llh_const_vertex
 event_index = 20
 
 # Random number seed.
-key = jax.random.PRNGKey(2)
+# key = jax.random.PRNGKey(2)
 
-# Get network and eval logic.
-eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/network')
-eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v)
-
+# # Get network and eval logic.
+# eval_network_v = get_network_eval_v_fn(bpath='/home/storage/hans/jax_reco/data/network')
+# eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v)
+dtype = jnp.float64
+eval_network_v = get_network_eval_v_fn(bpath='/mnt/scratch/baburish/TPN-training/gupta_mixture_jax/test_no_penalties_tree_start_epoch_35.eqx', dtype=dtype, n_hidden=96)
+eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=dtype) 
 # Get an IceCube event.
-bp = '/home/storage2/hans/i3files/21217'
-sim_handler = I3SimHandlerFtr(os.path.join(bp, 'meta_ds_21217_from_35000_to_53530.ftr'),
-                              os.path.join(bp, 'pulses_ds_21217_from_35000_to_53530.ftr'),
+bp = '/mnt/research/IceCube/Gupta-Reco/22645/tfrecords/ftr'
+sim_handler = I3SimHandlerFtr(os.path.join(bp, 'meta_ds_22645_from_1000_to_2000_10_to_100TeV.ftr'),
+                              os.path.join(bp, 'pulses_ds_22645_from_1000_to_2000_10_to_100TeV.ftr'),
                               '/home/storage/hans/jax_reco/data/icecube/detector_geometry.csv')
 
 meta, pulses = sim_handler.get_event_data(event_index)

@@ -52,7 +52,7 @@ event_ids = ['1022', '10393', '10644', '10738', '11086', '11232', '13011',
        '65472', '6586', '8', '8604', '8674', '8840', '9410', '9419',
        '9505']
 
-def make_event_plot(event_id):
+def make_event_plot(event_id, event_start, event_end):
     global eval_network_doms_and_track
     bp = '/home/storage2/hans/i3files/alerts/ftp-v1_flat/ftr/charge/calibrated/'
     sim_handler = I3SimHandler(os.path.join(bp, f'meta_ds_event_{event_id}_N100_from_0_to_10_1st_pulse.ftr'),
