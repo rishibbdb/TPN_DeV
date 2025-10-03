@@ -89,7 +89,7 @@ import matplotlib as mpl
 # Import TriplePandel stuff
 from lib.simdata_i3 import I3SimHandler
 from lib.geo import center_track_pos_and_time_based_on_data
-from lib.gupta_network_eqx_4comp import get_network_eval_v_fn
+from lib.gupta_network_eqx_4comp import get_network_eval_v_fn, get_network_eval_v_fn_f32
 from lib.experimental_methods import get_vertex_seeds
 from fitting.llh_scanner import get_scanner
 from fitting.llh_fitter import get_fitter
@@ -138,7 +138,16 @@ else:
     raise NotImplementedError(f"network {args.NETWORK} not implemnted.")
 
 # Network logic.
-eval_network_v = get_network_eval_v_fn(bpath=network_path, dtype=dtype, n_hidden=n_hidden)
+try:
+    ni = "f64"
+    print("Running f64 model")
+    eval_network_v = get_network_eval_v_fn(bpath=network_path, dtype=dtype, n_hidden=n_hidden)
+except:
+    ni = "f32"
+    print("Running f32 model")
+    eval_network_v = get_network_eval_v_fn_f32(bpath=network_path, dtype=dtype, n_hidden=n_hidden)
+
+# eval_network_v = get_network_eval_v_fn(bpath=network_path, dtype=dtype, n_hidden=n_hidden)
 eval_network_doms_and_track = get_eval_network_doms_and_track(eval_network_v, dtype=dtype, gupta=gupta, n_comp=n_comp)
 
 # Get an IceCube event.
