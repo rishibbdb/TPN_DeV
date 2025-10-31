@@ -94,7 +94,7 @@ from lib.experimental_methods import get_vertex_seeds
 from fitting.llh_scanner import get_scanner
 from fitting.llh_fitter import get_fitter
 from dom_track_eval import get_eval_network_doms_and_track
-from likelihood_conv_mpe_logsumexp_gupta import get_neg_c_triple_gamma_llh
+from likelihood_conv_mpe_w_noise_logsumexp_gupta import get_neg_c_triple_gamma_llh
 
 # A custom color scheme
 from palettable.cubehelix import Cubehelix
@@ -160,6 +160,7 @@ sim_handler = I3SimHandler(
 
 meta, pulses = sim_handler.get_event_data(args.EVENT_INDEX)
 print(f"muon energy: {meta['muon_energy_at_detector']/1.e3:.1f} TeV")
+print(meta)
 
 # Get dom locations, first hit times, and total charges (for each dom).
 event_data = sim_handler.get_per_dom_summary_from_sim_data(meta, pulses)
@@ -208,7 +209,7 @@ fitting_event_data = jnp.array(event_data[['x', 'y', 'z', 'time', 'charge']].to_
 print(fitting_event_data.shape)
 
 # Setup likelihood.
-neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track, sigma=args.GAUS_CONV_WIDTH)
+neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track, sig=args.GAUS_CONV_WIDTH)
 
 # Potential for additional stability via prescanning optimal vertex time
 
@@ -274,6 +275,9 @@ ix1, ix2 = np.where(delta_logl==0)
 ax.scatter(np.rad2deg([X[ix1, ix2]]), np.rad2deg([Y[ix1, ix2]]), s=50, marker='o', facecolors='none', edgecolors='khaki', zorder=100., label='grid min')
 ct = plt.contour(np.rad2deg(X), np.rad2deg(Y), delta_logl, levels=contours, linestyles=['solid'], colors=['khaki'], linewidths=1.0)
 
+print("truth: ", true_src[0])
+print("seed: ", track_src[0])
+print("best-fit: ", best_direction[0])
 ax.scatter(np.rad2deg(true_src[0]), np.rad2deg(true_src[1]), marker="*", color='red', label="truth", zorder=200)
 ax.scatter(np.rad2deg(track_src[0]), np.rad2deg(track_src[1]), marker="x", color='lime', label="seed", zorder=200)
 ax.scatter(np.rad2deg(best_direction[0]), np.rad2deg(best_direction[1]), marker="x", color="magenta", label="best-fit", zorder=200)

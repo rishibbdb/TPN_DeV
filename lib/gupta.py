@@ -34,8 +34,8 @@ def log1m_exp(x):
     oob = arr_x < crit_oob
     mask = arr_x > crit
 
-    more_val = jnp.log(-jnp.expm1(jnp.clip(arr_x, min=crit)))
-    less_val = jnp.log1p(-jnp.exp(jnp.clip(arr_x, max=crit)))
+    more_val = jnp.log(-jnp.expm1(jnp.clip(arr_x, a_min=crit)))
+    less_val = jnp.log1p(-jnp.exp(jnp.clip(arr_x, a_max=crit)))
 
     return jnp.where(
         oob,
@@ -261,7 +261,7 @@ def c_multi_gupta_spe_prob_large_sigma_fine(x, mix_probs, a, b, sigma=1000.):
     mix_probs_e = jnp.expand_dims(mix_probs, axis=-1)
 
     xvals_e = jnp.expand_dims(xvals, axis=0)
-    pdfs = jnp.sum(mix_probs_e * jnp.clip(pdf(xvals_e, a_e, b_e), min=0, max=None), axis=0)
+    pdfs = jnp.sum(mix_probs_e * jnp.clip(pdf(xvals_e, a_e, b_e), a_min=0, a_max=None), axis=0)
 
     return jnp.sum(n_pdf * pdfs * dx)
 
