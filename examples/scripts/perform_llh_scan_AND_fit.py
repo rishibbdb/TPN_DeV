@@ -161,6 +161,7 @@ sim_handler = I3SimHandler(
 meta, pulses = sim_handler.get_event_data(args.EVENT_INDEX)
 print(f"muon energy: {meta['muon_energy_at_detector']/1.e3:.1f} TeV")
 print(meta)
+print(pulses)
 
 # Get dom locations, first hit times, and total charges (for each dom).
 event_data = sim_handler.get_per_dom_summary_from_sim_data(meta, pulses)
@@ -176,6 +177,181 @@ true_zenith = meta['muon_zenith']
 true_azimuth = meta['muon_azimuth']
 true_src = jnp.array([true_zenith, true_azimuth])
 print("true direction:", true_src)
+
+# =======================
+# PDF plotting utilities
+# =======================
+
+from lib.gupta import (
+    c_multi_gupta_mpe_logprob_midpoint2_stable_v,
+    c_multi_gupta_spe_prob_large_sigma_fine_v,
+)
+
+def _to1d(x):
+    x = jnp.asarray(x)
+    return x.reshape((-1,)) if x.ndim == 0 else x
+
+
+def plot_pdf_for_dom_fixed(eval_network_doms_and_track_fn,
+                           event_data,          # (N_DOMS, 5) = [x,y,z,time,charge]
+                           dom_index,           # int
+                           track_direction,     # (2,)
+                           track_vertex,        # (3,)
+                           track_time,          # scalar
+                           t_min=0.0, t_max=1000.0, n_t=2000,
+                           sigma_signal=3.0, sigma_noise=1000.0,
+                           floor_pdf_height=1.0/6000.0,
+                           weights=(1.0-1e-3-1e-2, 1e-2, 1e-3),
+                           show_components=True):
+
+    dom_pos_all = jnp.asarray(event_data[:, :3])          # (N,3)
+    first_hit_all = jnp.asarray(event_data[:, 3])         # (N,)
+    charge_all    = jnp.asarray(event_data[:, 4])         # (N,)
+
+    logits_all, av_all, bv_all, geo_time_all = eval_network_doms_and_track_fn(
+        dom_pos_all, track_vertex, track_direction
+    )
+    # shapes:
+    # logits_all: (N, n_comp)
+    # av_all    : (N, n_comp, ?)
+    # bv_all    : (N, n_comp, ?)
+    # geo_time_all: (N,)
+
+    i = int(dom_index)
+    first_hit_time = first_hit_all[i]
+    charge_i = charge_all[i]
+
+    delay_obs = first_hit_time - (geo_time_all[i] + track_time)
+
+    log_mix_probs_i = jax.nn.log_softmax(logits_all[i])       # (n_comp,)
+    mix_probs_i = jnp.exp(log_mix_probs_i)                    # (n_comp,)
+    av_i = av_all[i]                                          # (n_comp, ?)
+    bv_i = bv_all[i]                                          # (n_comp, ?)
+
+    log_mix_b = log_mix_probs_i[None, ...]                    # (1, n_comp)
+    mix_b     = mix_probs_i[None, ...]                        # (1, n_comp)
+    av_b      = av_i[None, ...]                               # (1, n_comp, ?)
+    bv_b      = bv_i[None, ...]                               # (1, n_comp, ?)
+    nphot_b   = jnp.array([charge_i])                         # (1,)
+    sigma_sig = jnp.array(sigma_signal)
+    sigma_noi = jnp.array(sigma_noise)
+
+    t_grid = jnp.linspace(t_min, t_max, n_t)                  # (T,)
+
+    # physics logpdf(t)
+    def phys_logpdf_at_t(t):
+        return c_multi_gupta_mpe_logprob_midpoint2_stable_v(
+            jnp.array([t]),   # (1,)
+            log_mix_b,        # (1, n_comp)
+            av_b,             # (1, n_comp, ?)
+            bv_b,             # (1, n_comp, ?)
+            nphot_b,          # (1,)
+            sigma_sig         # scalar
+        )[0]  # (1,) -> scalar
+
+    physics_logpdf = jax.vmap(phys_logpdf_at_t, in_axes=(0,))(t_grid)  # (T,)
+    physics_pdf = jnp.exp(physics_logpdf)                               # (T,)
+
+    # noise pdf(t)
+    def noise_pdf_at_t(t):
+        return c_multi_gupta_spe_prob_large_sigma_fine_v(
+            jnp.array([t]),  # (1,)
+            mix_b,           # (1, n_comp)
+            av_b,            # (1, n_comp, ?)
+            bv_b,            # (1, n_comp, ?)
+            sigma_noi        # scalar
+        )[0]  # (1,) -> scalar
+
+    noise_pdf = jax.vmap(noise_pdf_at_t, in_axes=(0,))(t_grid)          # (T,)
+    floor_pdf = jnp.ones_like(t_grid) * floor_pdf_height                 # (T,)
+
+    # mixture
+    w_signal, w_noise, w_floor = weights
+    
+    mixture_pdf = w_signal*physics_pdf + w_noise*noise_pdf + w_floor*floor_pdf  # (T,)
+
+    phys_logpdf_obs = phys_logpdf_at_t(delay_obs)
+    phys_pdf_obs = jnp.exp(phys_logpdf_obs)
+    noise_pdf_obs = noise_pdf_at_t(delay_obs)
+    total_pdf_obs = w_signal*phys_pdf_obs + w_noise*noise_pdf_obs + w_floor*floor_pdf_height
+    per_dom_neg2logL = -2.0 * jnp.log(total_pdf_obs)
+
+    # plot
+    t_np  = np.asarray(t_grid)
+    mix_np = np.asarray(mixture_pdf)
+
+    plt.figure(figsize=(7.2, 4.0))
+    plt.plot(t_np, mix_np, linewidth=2.0, label="mixture pdf")
+    if show_components:
+        plt.plot(t_np, np.asarray(physics_pdf), linestyle="--", label="signal pdf")
+        plt.plot(t_np, np.asarray(noise_pdf), linestyle=":", label="noise pdf")
+        plt.plot(t_np, np.asarray(floor_pdf), linestyle="-.", label="floor")
+
+    plt.axvline(float(delay_obs), linestyle="--", linewidth=1.5,
+                label=f"observed delay = {float(delay_obs):.1f} ns")
+
+    plt.xlabel("time residual Δt [ns]")
+    plt.ylabel("probability density")
+    plt.title(f"pulse_idx #{i}   per-pulse -2logL = {float(per_dom_neg2logL):.3f}")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(f"pdf_scan_ev_{args.EVENT_INDEX}_pulse{i}.png")
+    plt.close()
+
+    return {
+        "pulse_index": i,
+        "delay_obs_ns": float(delay_obs),
+        "per_pulse_neg2logL": float(per_dom_neg2logL),
+        "t_grid": t_np,
+        "mixture_pdf": mix_np,
+    }
+
+def quick_plot_many_doms_fixed(eval_network_doms_and_track_fn,
+                               event_data,
+                               track_direction, track_vertex, track_time,
+                               dom_indices=None,    
+                               topk=None,           
+                               outdir=".",
+                               prefix="pdf_pulse",
+                               t_min=-200.0, t_max=800.0, n_t=2000,
+                               sigma_signal=3.0, sigma_noise=1000.0,
+                               floor_pdf_height=1.0/6000.0,
+                               weights=(1.0-1e-3-1e-2, 1e-2, 1e-3),
+                               show_components=True,
+                               dpi=200):
+
+    if dom_indices is None:
+        if topk is None:
+            raise ValueError("Either dom_indices or topk must be provided.")
+        charges = np.asarray(event_data[:, 4])
+        dom_indices = np.argsort(charges)[::-1][:topk]
+
+    os.makedirs(outdir, exist_ok=True)
+
+    results = []
+    for di in dom_indices:
+        fname = f"{prefix}_{int(di)}.png"
+        res = plot_pdf_for_dom_fixed(
+            eval_network_doms_and_track_fn=eval_network_doms_and_track_fn,
+            event_data=event_data,
+            dom_index=int(di),
+            track_direction=track_direction,
+            track_vertex=track_vertex,
+            track_time=track_time,
+            t_min=t_min, t_max=t_max, n_t=n_t,
+            sigma_signal=sigma_signal, sigma_noise=sigma_noise,
+            floor_pdf_height=floor_pdf_height,
+            weights=weights,
+            show_components=show_components,
+        )
+        results.append(res)
+
+    return {
+        "dom_indices": [int(d) for d in dom_indices],
+        "results": results,
+        "outdir": outdir,
+    }
+
 
 if args.SEED == "spline_mpe":
     # Use SplineMPE as a seed.
@@ -208,6 +384,8 @@ print("seed vertex:", centered_track_pos, "m")
 fitting_event_data = jnp.array(event_data[['x', 'y', 'z', 'time', 'charge']].to_numpy())
 print(fitting_event_data.shape)
 
+# --- LLH/Fit ---
+
 # Setup likelihood.
 neg_llh = get_neg_c_triple_gamma_llh(eval_network_doms_and_track, sig=args.GAUS_CONV_WIDTH)
 
@@ -233,6 +411,8 @@ print(f"logl: {best_logl:.3f}")
 print(f"direction: {np.rad2deg(best_direction)} deg")
 print("")
 
+
+# --- Grid scan ---
 
 # Set up scanner.
 # It splits the grid into sub-grids that are processed sequentially.
@@ -291,3 +471,16 @@ ax.tick_params(axis='both', which='both', width=1.5, colors='0.0', labelsize=16)
 plt.legend()
 plt.tight_layout()
 plt.savefig(f"scan_ev_{args.EVENT_INDEX}.png", dpi=300)
+
+
+# --- pdf plot ---
+
+quick_plot_many_doms_fixed(
+    eval_network_doms_and_track_fn=eval_network_doms_and_track,
+    event_data=fitting_event_data,
+    track_direction=best_direction,
+    track_vertex=best_vertex,
+    track_time=best_time,
+    topk=6, prefix="pdf_dom",
+    dom_indices=range(0,77),
+)
