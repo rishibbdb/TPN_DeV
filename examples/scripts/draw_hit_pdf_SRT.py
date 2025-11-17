@@ -177,6 +177,48 @@ true_src = jnp.array([true_zenith, true_azimuth])
 print("true direction:", true_src)
 
 # =======================
+# SRT noise model
+# =======================
+
+def get_srt_noise_weights(expected_pes):
+    
+    eps = 1e-12
+    log10_pes = jnp.log10(jnp.maximum(expected_pes, eps))
+
+    physicsWeight = 1.0 - jnp.exp(
+        -jnp.power(
+            10.0,
+            0.774234
+            - 1.02385 * jnp.arctan(0.969486 - 0.577865 * log10_pes)
+            + 0.193763 * jnp.arctan(16.2363 + 4.76944 * log10_pes),
+        )
+    )
+
+    random_arg = -1.36638 - 1.10099 * jnp.arctan(1.08653 + 0.850798 * log10_pes)
+    random_arg_clipped = jnp.minimum(0.0, random_arg)
+    randomWeight = 1.0 - jnp.exp(-jnp.power(10.0, random_arg_clipped))
+
+    afterWeight = 1.0 - jnp.exp(
+        -jnp.power(
+            10.0,
+            -0.186922
+            + 0.946511 * log10_pes
+            - 1.08804 * jnp.arctan(1.73241 + 0.760878 * log10_pes),
+        )
+    )
+
+    preLateWeight = 1.0 - jnp.exp(
+        -jnp.power(
+            10.0,
+            0.144828
+            + 0.928378 * log10_pes
+            - 1.11346 * jnp.arctan(1.3868 + 0.780568 * log10_pes),
+        )
+    )
+
+    return physicsWeight, randomWeight, afterWeight, preLateWeight
+
+# =======================
 # PDF plotting utilities
 # =======================
 
@@ -188,7 +230,6 @@ from lib.gupta import (
 def _to1d(x):
     x = jnp.asarray(x)
     return x.reshape((-1,)) if x.ndim == 0 else x
-
 
 def plot_pdf_for_hit(eval_network_doms_and_track_fn,
                            event_data,          # (N_DOMS, 5) = [x,y,z,time,charge]
@@ -261,12 +302,45 @@ def plot_pdf_for_hit(eval_network_doms_and_track_fn,
             sigma_noi        # scalar
         )[0]  # (1,) -> scalar
 
+    
     noise_pdf = jax.vmap(noise_pdf_at_t, in_axes=(0,))(t_grid)          # (T,)
     floor_pdf = jnp.ones_like(t_grid) * floor_pdf_height                 # (T,)
+    
+    # calculate expected pes
+    # mix_b: shape (1, n_comp)
+    mix_probs = mix_b[0]                  # (n_comp,)
+    n_vals = jnp.arange(1, mix_probs.shape[0] + 1)  # [1, 2, ..., n_comp]
+    
+    expected_pes_raw = jnp.sum(n_vals * mix_probs)
+    expected_pes = jnp.maximum(expected_pes_raw, 1e-3)  # prevent zero
+
+    # --- SRT weights ---
+    physicsWeight, randomWeight, afterWeight, preLateWeight = \
+    get_srt_noise_weights(expected_pes)
+
+    W_tot = physicsWeight + randomWeight + afterWeight + preLateWeight
+
+    w_signal = physicsWeight / W_tot
+    w_noise  = (randomWeight + afterWeight + preLateWeight) / W_tot
 
     # mixture
-    w_signal, w_noise, w_floor = weights
+    w_floor = weights[2]
     
+    mixture_pdf = w_signal*physics_pdf + w_noise*noise_pdf + w_floor*floor_pdf
+    
+    phys_logpdf_obs = phys_logpdf_at_t(delay_obs)
+    phys_pdf_obs = jnp.exp(phys_logpdf_obs)
+    noise_pdf_obs = noise_pdf_at_t(delay_obs)
+
+    total_pdf_obs = (
+        w_signal*phys_pdf_obs
+        + w_noise*noise_pdf_obs
+        + w_floor*floor_pdf_height
+    )
+    per_hit_neg2logL = -2.0 * jnp.log(total_pdf_obs)
+
+    print("per_hit_neg2logL: "+str(per_hit_neg2logL))
+    '''
     mixture_pdf = w_signal*physics_pdf + w_noise*noise_pdf + w_floor*floor_pdf  # (T,)
 
     phys_logpdf_obs = phys_logpdf_at_t(delay_obs)
@@ -274,8 +348,8 @@ def plot_pdf_for_hit(eval_network_doms_and_track_fn,
     noise_pdf_obs = noise_pdf_at_t(delay_obs)
     total_pdf_obs = w_signal*phys_pdf_obs + w_noise*noise_pdf_obs + w_floor*floor_pdf_height
     per_hit_neg2logL = -2.0 * jnp.log(total_pdf_obs)
-    print("per_hit_neg2logL: "+str(per_hit_neg2logL))
-
+    '''
+    
     # plot
     t_np  = np.asarray(t_grid)
     mix_np = np.asarray(mixture_pdf)
