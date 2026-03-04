@@ -79,7 +79,6 @@ def multi_gupta_cdf(x, mix_probs, a, b):
     cdf_vals = cdf(x, a, b)
     return jnp.squeeze(jnp.sum(mix_probs * cdf_vals, axis=0))
 
-
 def c_multi_gupta_mpe_logprob_midpoint2_stable(x, log_mix_probs, a, b, n, sigma=3.0):
     """
     Q < 30
