@@ -79,6 +79,155 @@ def multi_gupta_cdf(x, mix_probs, a, b):
     cdf_vals = cdf(x, a, b)
     return jnp.squeeze(jnp.sum(mix_probs * cdf_vals, axis=0))
 
+# added for SRT
+'''
+def log_weighted_avg_two(logA, logB, wA, wB, eps=1e-30):
+    """ (wA*A + wB*B)/(wA+wB) in log-space. """
+    wA = jnp.maximum(wA, 0.0)
+    wB = jnp.maximum(wB, 0.0)
+    denom = jnp.maximum(wA + wB, eps)
+    return jax.scipy.special.logsumexp(
+        jnp.stack([logA + jnp.log(jnp.maximum(wA, eps)),
+                   logB + jnp.log(jnp.maximum(wB, eps))], axis=0),
+        axis=0
+    ) - jnp.log(denom)
+'''
+def log_weighted_avg_two(logA, logB, wA, wB, eps=1e-30):
+    """ (wA*A + wB*B)/(wA+wB) in log-space. """
+    logA = jnp.asarray(logA)
+    logB = jnp.asarray(logB)
+
+    # (N,1)/(1,N)
+    logA = jnp.squeeze(logA)
+    logB = jnp.squeeze(logB)
+
+    # broadcast (case of floor)
+    if logA.ndim == 0 and logB.ndim > 0:
+        logA = jnp.broadcast_to(logA, logB.shape)
+    if logB.ndim == 0 and logA.ndim > 0:
+        logB = jnp.broadcast_to(logB, logA.shape)
+
+    wA = jnp.maximum(wA, 0.0)
+    wB = jnp.maximum(wB, 0.0)
+    denom = jnp.maximum(wA + wB, eps)
+
+    a = logA + jnp.log(jnp.maximum(wA, eps))  # wA scalar OK
+    b = logB + jnp.log(jnp.maximum(wB, eps))  # wB scalar OK
+
+    return jax.scipy.special.logsumexp(jnp.stack([a, b], axis=0), axis=0) - jnp.log(denom)
+
+# added for SRT
+def log_weighted_avg_three(logA, logB, logC, wA, wB, wC, eps=1e-30):
+    """ (wA*A + wB*B + wC*C)/(wA+wB+wC) in log-space. """
+    wA = jnp.maximum(wA, 0.0)
+    wB = jnp.maximum(wB, 0.0)
+    wC = jnp.maximum(wC, 0.0)
+    denom = jnp.maximum(wA + wB + wC, eps)
+    return jax.scipy.special.logsumexp(
+        jnp.stack([logA + jnp.log(jnp.maximum(wA, eps)),
+                   logB + jnp.log(jnp.maximum(wB, eps)),
+                   logC + jnp.log(jnp.maximum(wC, eps))], axis=0),
+        axis=0
+    ) - jnp.log(denom)
+
+# added for SRT
+def srt_get_noise_weights(expected_pes, eps=1e-12):
+    log10_pes = jnp.log10(jnp.maximum(expected_pes, eps))
+
+    physicsW = 1.0 - jnp.exp(
+        -jnp.power(
+            10.0,
+            0.774234
+            - 1.02385 * jnp.arctan(0.969486 - 0.577865 * log10_pes)
+            + 0.193763 * jnp.arctan(16.2363 + 4.76944 * log10_pes),
+        )
+    )
+
+    rw_arg = -1.36638 - 1.10099 * jnp.arctan(1.08653 + 0.850798 * log10_pes)
+    rw_arg = jnp.minimum(0.0, rw_arg)
+    randomW = 1.0 - jnp.exp(-jnp.power(10.0, rw_arg))
+
+    afterW = 1.0 - jnp.exp(
+        -jnp.power(
+            10.0,
+            -0.186922
+            + 0.946511 * log10_pes
+            - 1.08804 * jnp.arctan(1.73241 + 0.760878 * log10_pes),
+        )
+    )
+
+    preLateW = 1.0 - jnp.exp(
+        -jnp.power(
+            10.0,
+            0.144828
+            + 0.928378 * log10_pes
+            - 1.11346 * jnp.arctan(1.3868 + 0.780568 * log10_pes),
+        )
+    )
+    return physicsW, randomW, afterW, preLateW
+
+# added for SRT
+def build_weighted_logdf_srt_mpe(
+    *,
+    log_bareDF,
+    log_stochDF,
+    log_rDF,
+    log_afterDF,
+    log_floorDF,
+    bare_pes,
+    stoch_pes,
+    expected_pes,
+    modelStochastics: bool,
+    noiseModel: str,      # none, flat, SRT
+    floorWeight: float,
+    low_pes: float = 0.0,
+    eps=1e-30,
+):
+    # physicsDF
+    w_bare = bare_pes
+    w_stoch = stoch_pes + low_pes
+
+    log_physicsDF = log_bareDF
+    log_randomDF = log_floorDF
+
+    w_after = 0.
+    w_rand = floorWeight
+    w_phys = 1. - w_rand
+    if (noiseModel != "none"):
+        # physicsDF
+        log_physicsDF = jnp.where(
+            modelStochastics,
+            log_weighted_avg_two(log_stochDF, log_bareDF, w_stoch, w_bare, eps=eps),
+            log_bareDF
+            )
+        
+        # randomDF
+        bumpWeight = jnp.where(noiseModel == "flat", 0.0, 1.0)
+        bump_amp = (1.0 - jnp.exp(-expected_pes))                 # scalar/array
+        w_r = bumpWeight * bump_amp
+        w_floor = floorWeight
+
+        log_randomDF = log_weighted_avg_two(log_rDF, log_floorDF, w_r, w_floor, eps=eps)
+
+        # get SRT weights
+        physicsW, randomW, afterW, preLateW = srt_get_noise_weights(expected_pes)
+
+        # (physicsW + preLateW) * physicsDF
+        w_phys = physicsW + preLateW
+        w_rand = randomW
+        w_after = afterW
+
+        return log_weighted_avg_three(
+            log_physicsDF, log_randomDF, log_afterDF,
+            w_phys, w_rand, w_after,
+            eps=eps
+        )
+    
+    #jax.debug.print("log_physicsDF shape {}, log_randomDF shape {}", log_physicsDF.shape, log_randomDF.shape)
+
+    return log_weighted_avg_two(log_physicsDF, log_randomDF, w_phys, w_rand, eps=eps)
+
+
 def c_multi_gupta_mpe_logprob_midpoint2_stable(x, log_mix_probs, a, b, n, sigma=3.0):
     """
     Q < 30
