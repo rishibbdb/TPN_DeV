@@ -1,3 +1,4 @@
+from lib.gupta import build_weighted_logdf_srt_mpe
 from lib.gupta import c_multi_gupta_mpe_logprob_midpoint2_stable_v
 from lib.gupta import c_multi_gupta_spe_prob_large_sigma_fine_v
 import jax
@@ -5,7 +6,130 @@ import jax.numpy as jnp
 from jax.scipy.stats.norm import pdf as norm_pdf
 from jax.scipy.stats.norm import logpdf as norm_logpdf
 
-def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn, sig=3.0):
+def get_neg_c_triple_gamma_llh_SRT_noise(eval_network_doms_and_track_fn):
+    
+    @jax.jit
+    def neg_c_triple_gamma_llh_SRT_noise(track_direction,
+                                        track_vertex,
+                                        track_time,
+                                        event_data):
+        
+        # ---- hyperparams / constants
+        sigma = jnp.array(3.0)  # width of gaussian convolution
+        timeWindow = jnp.array(6000.0)  # ?
+        floorWeight = jnp.array(1e-3)   # We use this when noiseModel is "none"
+        sigma_noise = jnp.array(1000.0)
+
+        # choose noiseModel: "none" | "flat" | "SRT"
+        noiseModel = "none"
+        modelStochastics = False
+
+        # ---- unpack
+        dom_pos = event_data[:, :3]
+        first_hit_times = event_data[:, 3]
+        charges = event_data[:, 4]
+        #n_photons = charges
+        n_photons = jnp.clip(charges, a_min=1, a_max=10000)        
+        '''
+        print("###### event_data = ", event_data) 
+        print("###### dom_pos.shape = ", dom_pos.shape)
+        print("###### first_hit_times.shape = ", first_hit_times.shape)
+        print("###### charges.shape = ", charges.shape)       
+        print("###### n_photons.shape = ", n_photons.shape)
+        '''
+        # bare_pes/stoch_pes/expected_pes: suppose to be given
+        # currentley dummy (charge from event data)
+        ncol = event_data.shape[1]
+        bare_pes = jnp.where(ncol > 5, event_data[:, 5], charges)
+        stoch_pes = jnp.where(ncol > 6, event_data[:, 6], jnp.zeros_like(charges))
+        expected_pes = jnp.where(ncol > 7, event_data[:, 7], bare_pes + stoch_pes)
+
+        # ---- network
+        logits, av, bv, geo_time = eval_network_doms_and_track_fn(dom_pos, track_vertex, track_direction)
+        delay_time = first_hit_times - (geo_time + track_time)
+        '''
+        print("###### logits.shape = ", logits.shape)
+        print("###### av.shape = ", av.shape)
+        print("###### bv.shape = ", bv.shape)
+        print("###### geo_time.shape = ", geo_time.shape)
+        '''
+        # BuildWeightedPdf components 
+        # barePdf = ConvolvedPdf(tres, ps, preJitter)
+        # log_physics_probs
+        log_mix_probs = jax.nn.log_softmax(logits)
+        log_physics_probs = c_multi_gupta_mpe_logprob_midpoint2_stable_v(delay_time,
+                    log_mix_probs,
+                    av,
+                    bv,
+                    n_photons,
+                    sigma)
+
+        '''
+        mix_probs = jnp.exp(log_mix_probs)
+        log_noise_probs = jnp.log(c_multi_gupta_spe_prob_large_sigma_fine_v(delay_time,
+                mix_probs,
+                av,
+                bv,
+                sigma_noise))
+        '''
+
+        log_rDF = 0
+        log_afterDF = 0
+        
+        log_floorDF = jnp.log(jnp.array(1./6000.))
+        floorWeight = jnp.array(1.e-2) # to be optimized (so far 0.01)
+
+        if (noiseModel != "none"):
+
+            # rPdf = ConvolvedPdf(tres, random_noise_ps, 0)
+            # need random_noise_ps
+            # currently same (logits,av,bv) with log_physics_probs
+            log_rDF = c_multi_gupta_spe_prob_large_sigma_fine_v( 
+               tres, log_mix_probs, av, bv, n_photons, jnp.array(0.0)
+            )
+
+            # floorPdf = 1/timeWindow
+            log_floorDF = jnp.ones_like(tres) * (-jnp.log(timeWindow))
+
+            # afterPdf = ConvolvedPdf(tres-2000, random_noise_ps, 0)
+            log_afterDF = c_multi_gupta_spe_prob_large_sigma_fine_v(
+                tres - 2000.0, log_mix_probs, av, bv, n_photons, jnp.array(0.0)
+            )
+
+        log_stochDF = 0
+        if (modelStochastics):
+            # stochPdf = ConvolvedPdf(tres, stochastics_ps, preJitter)
+            # need stochastics_ps
+            # currently same (logits,av,bv) with log_physics_probs
+            log_stochDF = c_multi_gupta_spe_prob_large_sigma_fine_v(
+                tres, log_mix_probs, av, bv, n_photons, preJitter
+            )
+
+        # final log df via SRT mixing
+        log_df = build_weighted_logdf_srt_mpe(
+            log_bareDF=log_physics_probs,
+            log_stochDF=log_stochDF,
+            log_rDF=log_rDF,
+            log_afterDF=log_afterDF,
+            log_floorDF=log_floorDF,
+            bare_pes=bare_pes,
+            stoch_pes=stoch_pes,
+            expected_pes=expected_pes,
+            modelStochastics=modelStochastics,
+            noiseModel=noiseModel,
+            floorWeight=floorWeight,
+            low_pes=0.0,
+        )
+
+        # safety
+        log_df = jnp.maximum(log_df, jnp.log(jnp.array(1e-300)))
+
+        return -2.0 * jnp.sum(log_df)
+
+    return neg_c_triple_gamma_llh_SRT_noise
+
+
+def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn):
     """
     here would be a smart docstring
     """
@@ -18,7 +142,7 @@ def get_neg_c_triple_gamma_llh(eval_network_doms_and_track_fn, sig=3.0):
 
 
         # Constant parameters.
-        sigma = jnp.array(sig) # width of gaussian convolution
+        sigma = jnp.array(3.0) # width of gaussian convolution
         sigma_noise = jnp.array(1000.0) # currently 1000
 
         dom_pos = event_data[:, :3]
