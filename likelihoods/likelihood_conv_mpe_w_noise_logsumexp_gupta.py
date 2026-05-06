@@ -21,7 +21,8 @@ def get_neg_c_triple_gamma_llh_SRT_noise(eval_network_doms_and_track_fn):
         sigma_noise = jnp.array(1000.0)
 
         # choose noiseModel: "none" | "flat" | "SRT"
-        noiseModel = "none"
+        #noiseModel = "none"
+        noiseModel = "SRT"
         modelStochastics = False
 
         # ---- unpack
@@ -83,18 +84,35 @@ def get_neg_c_triple_gamma_llh_SRT_noise(eval_network_doms_and_track_fn):
 
             # rPdf = ConvolvedPdf(tres, random_noise_ps, 0)
             # need random_noise_ps
+            # random_noise_ps = physics PDF smeared by ~1 μs
             # currently same (logits,av,bv) with log_physics_probs
+            '''
             log_rDF = c_multi_gupta_spe_prob_large_sigma_fine_v( 
-               tres, log_mix_probs, av, bv, n_photons, jnp.array(0.0)
+               delay_time, log_mix_probs, av, bv, n_photons, sigma_noise
             )
+            '''
+            log_physics_probs = c_multi_gupta_mpe_logprob_midpoint2_stable_v(delay_time,
+                    log_mix_probs,
+                    av,
+                    bv,
+                    n_photons,
+                    sigma_noise)
 
             # floorPdf = 1/timeWindow
-            log_floorDF = jnp.ones_like(tres) * (-jnp.log(timeWindow))
+            log_floorDF = jnp.ones_like(delay_time) * (-jnp.log(timeWindow))
 
             # afterPdf = ConvolvedPdf(tres-2000, random_noise_ps, 0)
+            '''
             log_afterDF = c_multi_gupta_spe_prob_large_sigma_fine_v(
-                tres - 2000.0, log_mix_probs, av, bv, n_photons, jnp.array(0.0)
+                delay_time - 2000.0, log_mix_probs, av, bv, n_photons, sigma_noise
             )
+            '''
+            log_afterDF = c_multi_gupta_mpe_logprob_midpoint2_stable_v(delay_time - 2000.0,
+                    log_mix_probs,
+                    av,
+                    bv,
+                    n_photons,
+                    sigma_noise)
 
         log_stochDF = 0
         if (modelStochastics):
